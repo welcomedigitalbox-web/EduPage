@@ -1,5 +1,7 @@
 import { admin } from './supabase';
 import type { BotSettings, LeadStage, MsgAuthor } from './types';
+import type { KbItem } from './ai';
+import { fetchSellable } from './pos';
 
 const STAGE_ORDER: LeadStage[] = [
   'new', 'engaged', 'qualified', 'negotiating', 'ordered', 'won',
@@ -18,22 +20,46 @@ export function shouldAdvance(from: LeadStage, to: LeadStage): boolean {
 }
 
 export async function getSettings(): Promise<BotSettings> {
-  const { data } = await admin().from('bot_settings').select('*').eq('id', 1).single();
+  const { data } = await admin().from('msgr_settings').select('*').eq('id', 1).single();
   return (data ?? {
-    is_enabled: true, business_name: 'My Shop', language: 'my',
+    is_enabled: true, business_name: 'My Shop', default_store_id: null,
+    quote_stock: true, max_kb_products: 120, language: 'my',
     persona: 'Friendly, concise Burmese shop assistant.', greeting: null,
     handoff_keywords: [], office_hours: null, min_confidence: 0.6,
     max_bot_turns: 6, follow_up_hours: 4, ghost_hours: 48,
   }) as BotSettings;
 }
 
-export async function getKb() {
-  const { data } = await admin()
-    .from('kb_items')
-    .select('kind,title,body,price,currency,in_stock')
-    .eq('is_active', true)
-    .limit(200);
-  return data ?? [];
+/**
+ * The bot's knowledge base = live POS products (price + stock for the store
+ * that fulfils Messenger orders) + the policy notes that a product row cannot
+ * express. Nothing about a product is stored twice, so a price change at the
+ * till is reflected in the next Messenger reply.
+ */
+export async function getKb(settings: BotSettings): Promise<KbItem[]> {
+  const { data: policies } = await admin()
+    .from('msgr_kb_items').select('kind,title,body').eq('is_active', true).limit(60);
+
+  const items: KbItem[] = (policies ?? []).map((p) => ({
+    kind: p.kind, title: p.title, body: p.body,
+  }));
+
+  if (!settings.default_store_id) return items;
+
+  const products = await fetchSellable(settings.default_store_id, settings.max_kb_products);
+  for (const p of products) {
+    items.push({
+      kind: 'product',
+      title: p.display_name,
+      body: '',
+      price: p.price,
+      stock: p.stock_qty,
+      sku: p.sku,
+      product_id: p.product_id,
+      variant_id: p.variant_id,
+    });
+  }
+  return items;
 }
 
 export interface Referral {
@@ -44,7 +70,7 @@ export interface Referral {
 export async function upsertContact(pageId: string, psid: string, referral?: Referral) {
   const db = admin();
   const { data: existing } = await db
-    .from('contacts').select('*').eq('page_id', pageId).eq('psid', psid).maybeSingle();
+    .from('msgr_contacts').select('*').eq('page_id', pageId).eq('psid', psid).maybeSingle();
 
   if (existing) {
     // Only fill attribution if it was never captured — first touch wins.
@@ -54,7 +80,7 @@ export async function upsertContact(pageId: string, psid: string, referral?: Ref
       patch.source_type = 'ad';
       patch.source_ref = referral.ref ?? null;
     }
-    await db.from('contacts').update(patch).eq('id', existing.id);
+    await db.from('msgr_contacts').update(patch).eq('id', existing.id);
     return { ...existing, ...patch };
   }
 
@@ -65,7 +91,7 @@ export async function upsertContact(pageId: string, psid: string, referral?: Ref
     source_ad_id: referral?.ad_id ?? null,
     source_ref: referral?.ref ?? null,
   };
-  const { data, error } = await db.from('contacts').insert(insert).select('*').single();
+  const { data, error } = await db.from('msgr_contacts').insert(insert).select('*').single();
   if (error) throw error;
   return data;
 }
@@ -73,10 +99,10 @@ export async function upsertContact(pageId: string, psid: string, referral?: Ref
 export async function getOrCreateConversation(contactId: string) {
   const db = admin();
   const { data: existing } = await db
-    .from('conversations').select('*').eq('contact_id', contactId).maybeSingle();
+    .from('msgr_conversations').select('*').eq('contact_id', contactId).maybeSingle();
   if (existing) return existing;
   const { data, error } = await db
-    .from('conversations').insert({ contact_id: contactId }).select('*').single();
+    .from('msgr_conversations').insert({ contact_id: contactId }).select('*').single();
   if (error) throw error;
   return data;
 }
@@ -94,7 +120,7 @@ export async function recordMessage(args: {
   sentAt?: string;
 }) {
   const db = admin();
-  const { error } = await db.from('messages').insert({
+  const { error } = await db.from('msgr_messages').insert({
     conversation_id: args.conversationId,
     contact_id: args.contactId,
     mid: args.mid ?? null,
@@ -116,15 +142,15 @@ export async function setStage(
 ) {
   if (!shouldAdvance(from, to)) return false;
   const db = admin();
-  await db.from('contacts').update({ stage: to }).eq('id', contactId);
-  await db.from('lead_events').insert({
+  await db.from('msgr_contacts').update({ stage: to }).eq('id', contactId);
+  await db.from('msgr_lead_events').insert({
     contact_id: contactId, from_stage: from, to_stage: to, reason, actor,
   });
   return true;
 }
 
 export async function handoffToHuman(conversationId: string, reason: string) {
-  await admin().from('conversations').update({
+  await admin().from('msgr_conversations').update({
     status: 'needs_human',
     needs_human_reason: reason,
     needs_human_since: new Date().toISOString(),
@@ -137,24 +163,24 @@ export async function scheduleFollowUp(args: {
   const db = admin();
   const due = new Date(Date.now() + args.hours * 3600_000).toISOString();
   // one open follow-up per contact; a newer one replaces the old
-  await db.from('follow_ups')
+  await db.from('msgr_follow_ups')
     .update({ status: 'cancelled' })
     .eq('contact_id', args.contactId).eq('status', 'pending');
-  await db.from('follow_ups').insert({
+  await db.from('msgr_follow_ups').insert({
     contact_id: args.contactId, due_at: due, reason: args.reason,
     priority: args.priority ?? 2, created_by: 'system',
   });
 }
 
 export async function closeFollowUps(contactId: string) {
-  await admin().from('follow_ups')
+  await admin().from('msgr_follow_ups')
     .update({ status: 'done', completed_at: new Date().toISOString() })
     .eq('contact_id', contactId).eq('status', 'pending');
 }
 
 export async function recentHistory(conversationId: string, limit = 16) {
   const { data } = await admin()
-    .from('messages')
+    .from('msgr_messages')
     .select('direction,author,text,attachments,sent_at')
     .eq('conversation_id', conversationId)
     .order('sent_at', { ascending: false })

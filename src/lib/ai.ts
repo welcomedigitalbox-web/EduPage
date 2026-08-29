@@ -8,9 +8,17 @@ function client() {
   return _client;
 }
 
+/** What the bot is allowed to state as fact. Products come live from the POS
+ *  tables; policies come from msgr_kb_items. */
 export interface KbItem {
-  kind: string; title: string; body: string;
-  price: number | null; currency: string | null; in_stock: boolean | null;
+  kind: string;
+  title: string;
+  body: string;
+  price?: number | null;
+  stock?: number | null;
+  sku?: string | null;
+  product_id?: string | null;
+  variant_id?: string | null;
 }
 
 export interface AiTurn { role: 'customer' | 'agent'; text: string }
@@ -23,11 +31,16 @@ export interface AiDecision {
   needs_human: boolean;
   handoff_reason: string | null;
   extracted: {
+    name?: string | null;
     phone?: string | null;
     address?: string | null;
-    product?: string | null;
-    quantity?: number | null;
-    amount?: number | null;
+    items?: {
+      product_id: string;
+      variant_id?: string | null;
+      product_name: string;
+      qty: number;
+      unit_price: number;
+    }[];
   };
   follow_up: { needed: boolean; hours: number | null; reason: string | null };
   usage: { input_tokens: number; output_tokens: number; latency_ms: number; model: string };
@@ -67,12 +80,27 @@ const DECISION_TOOL: Anthropic.Tool = {
       handoff_reason: { type: 'string' },
       extracted: {
         type: 'object',
+        description: 'Facts the customer stated in their own words. Never guess these.',
         properties: {
+          name: { type: 'string' },
           phone: { type: 'string' },
           address: { type: 'string' },
-          product: { type: 'string' },
-          quantity: { type: 'number' },
-          amount: { type: 'number' },
+          items: {
+            type: 'array',
+            description:
+              'Only fill this when the customer has clearly committed to buying. Copy product_id and variant_id EXACTLY from the id= field in the knowledge base — never invent one.',
+            items: {
+              type: 'object',
+              properties: {
+                product_id: { type: 'string' },
+                variant_id: { type: 'string' },
+                product_name: { type: 'string' },
+                qty: { type: 'number' },
+                unit_price: { type: 'number' },
+              },
+              required: ['product_id', 'product_name', 'qty', 'unit_price'],
+            },
+          },
         },
       },
       follow_up: {
@@ -89,15 +117,21 @@ const DECISION_TOOL: Anthropic.Tool = {
   },
 };
 
-function kbBlock(kb: KbItem[]): string {
+function kbBlock(kb: KbItem[], quoteStock: boolean): string {
   if (!kb.length) return '(knowledge base is empty — you must hand off any factual question)';
   return kb
     .map((k) => {
-      const price = k.price != null ? ` | price: ${k.price} ${k.currency ?? ''}` : '';
-      const stock = k.in_stock === false ? ' | OUT OF STOCK' : '';
-      return `### [${k.kind}] ${k.title}${price}${stock}\n${k.body}`;
+      if (k.kind === 'product') {
+        const price = k.price != null ? `${k.price.toLocaleString()} MMK` : 'price unknown';
+        const stock =
+          k.stock == null ? '' :
+          k.stock <= 0 ? ' | OUT OF STOCK — do not accept an order for this' :
+          quoteStock ? ` | ${k.stock} in stock` : ' | in stock';
+        return `- ${k.title} | ${price}${stock} | id=${k.product_id ?? ''}${k.variant_id ? ':' + k.variant_id : ''}`;
+      }
+      return `### [${k.kind}] ${k.title}\n${k.body}`;
     })
-    .join('\n\n');
+    .join('\n');
 }
 
 function systemPrompt(s: BotSettings, kb: KbItem[]): string {
@@ -118,7 +152,8 @@ HARD RULES — breaking these costs the shop money:
 1. Answer ONLY from the knowledge base below. Never invent a price, a stock level, a delivery time, or a promotion.
 2. If the answer is not in the knowledge base, set needs_human = true and keep the reply to a short holding line ("ခဏလေးစောင့်ပေးပါ၊ staff ကနေ ချက်ချင်းပြန်ဖြေပေးပါမယ်ရှင်").
 3. Complaints, refunds, damaged goods, or an angry customer → needs_human = true, always.
-4. When the customer commits to buying, collect name, phone, and full address, then set stage = "ordered" and needs_human = true so a person confirms the order.
+4. Prices and stock in the knowledge base come live from the shop's POS. Quote them exactly. If an item is marked OUT OF STOCK, say so and offer an alternative from the list — never take an order for it.
+4b. When the customer commits to buying, collect name, phone and full address, fill extracted.items with the exact ids from the knowledge base, set stage = "ordered" and needs_human = true. A person confirms every order before it ships.
 5. Never promise a discount. Never quote a price that is not in the knowledge base.
 6. Keep replies to 1-3 short sentences. This is Messenger, not email. No bullet lists, no headings.
 7. Do not use emoji unless the customer used one first.
@@ -132,8 +167,8 @@ STAGE GUIDE:
 - ordered: agreed to buy, order details being taken
 - lost: said no / too expensive / already bought elsewhere
 
-KNOWLEDGE BASE
-${kbBlock(kb)}`;
+KNOWLEDGE BASE (live from the POS — prices and stock are current as of this second)
+${kbBlock(kb, s.quote_stock)}`;
 }
 
 export async function decide(opts: {

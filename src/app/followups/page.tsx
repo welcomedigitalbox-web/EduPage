@@ -11,7 +11,7 @@ export default async function FollowUps() {
   const rows = await followUpQueue();
   const contactIds = rows.map((r) => r.contact_id);
   const { data: convos } = contactIds.length
-    ? await admin().from('conversations').select('id,contact_id').in('contact_id', contactIds)
+    ? await admin().from('msgr_conversations').select('id,contact_id').in('contact_id', contactIds)
     : { data: [] as { id: string; contact_id: string }[] };
   const convoOf = new Map((convos ?? []).map((c) => [c.contact_id, c.id]));
 
@@ -46,7 +46,7 @@ function Section({
       <div className={`label mb-2 ${urgent ? 'text-warn' : ''}`}>{title}</div>
       <div className="card divide-y divide-edge">
         {rows.map((r) => {
-          const c = r.contacts as { id: string; name: string | null; psid: string; stage: LeadStage; phone: string | null; last_inbound_at: string | null };
+          const c = r.msgr_contacts as { id: string; name: string | null; psid: string; stage: LeadStage; phone: string | null; last_inbound_at: string | null };
           const cid = convoOf.get(String(r.contact_id));
           return (
             <div key={String(r.id)} className="flex items-center justify-between gap-4 p-3">

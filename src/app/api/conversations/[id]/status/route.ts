@@ -12,6 +12,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (assigned_to !== undefined) patch.assigned_to = assigned_to;
   if (status === 'closed') patch.closed_at = new Date().toISOString();
   if (status !== 'needs_human') { patch.needs_human_reason = null; patch.needs_human_since = null; }
-  await admin().from('conversations').update(patch).eq('id', id);
+  await admin().from('msgr_conversations').update(patch).eq('id', id);
   return NextResponse.json({ ok: true });
 }

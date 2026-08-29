@@ -5,23 +5,25 @@ import { SettingsForm, KbEditor } from '@/components/SettingsForm';
 export const dynamic = 'force-dynamic';
 
 export default async function Settings() {
-  const settings = await getSettings();
-  const { data: kb } = await admin()
-    .from('kb_items').select('id,kind,title,body,price,in_stock')
-    .eq('is_active', true).order('kind').limit(200);
+  const [settings, kbRes, storeRes] = await Promise.all([
+    getSettings(),
+    admin().from('msgr_kb_items').select('id,kind,title,body').eq('is_active', true).order('kind').limit(200),
+    admin().from('stores').select('id,name').eq('is_active', true).order('name'),
+  ]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <section className="space-y-3">
         <h1 className="text-xl font-semibold">Bot သတ်မှတ်ချက်</h1>
-        <SettingsForm initial={settings} />
+        <SettingsForm initial={settings} stores={storeRes.data ?? []} />
       </section>
       <section className="space-y-3">
-        <h1 className="text-xl font-semibold">Knowledge base</h1>
+        <h1 className="text-xl font-semibold">စည်းကမ်း / FAQ</h1>
         <p className="text-sm text-muted">
-          Bot က ဒီထဲက အချက်အလက်တွေကိုပဲ သုံးပြီး ဖြေပါတယ်။ ဒီထဲမပါတာမေးရင် လူ့ဆီ အလိုအလျောက် လွှဲပါတယ်။
+          ပစ္စည်းနာမည်၊ ဈေးနှုန်းနဲ့ stock က POS ကနေ တိုက်ရိုက်ရပါတယ် — ဒီမှာ ထပ်မထည့်ရပါ။
+          ဒီစာရင်းက ပို့ခ၊ ငွေပေးချေမှု၊ ပြန်လဲစည်းကမ်း စတဲ့ ပစ္စည်းတစ်ခုချင်းနဲ့ မဆိုင်တာတွေအတွက်ပါ။
         </p>
-        <KbEditor items={kb ?? []} />
+        <KbEditor items={kbRes.data ?? []} />
       </section>
     </div>
   );

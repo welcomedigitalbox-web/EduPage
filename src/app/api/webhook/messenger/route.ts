@@ -93,7 +93,7 @@ async function handleEvent(pageId: string, ev: MessagingEvent) {
   // Fill in the profile once, lazily.
   if (!contact.name) {
     const profile = await fetchProfile(psid);
-    if (profile) await db.from('contacts').update(profile).eq('id', contact.id);
+    if (profile) await db.from('msgr_contacts').update(profile).eq('id', contact.id);
   }
 
   const text = ev.message?.text ?? ev.postback?.title ?? null;
@@ -113,14 +113,14 @@ async function handleEvent(pageId: string, ev: MessagingEvent) {
   });
   if (!isNew) return; // duplicate webhook delivery
 
-  await db.from('conversations').update({
+  await db.from('msgr_conversations').update({
     inbound_count: convo.inbound_count + 1,
     last_message_at: sentAt,
     last_inbound_at: sentAt,
     // a customer replying re-opens a closed thread
     status: convo.status === 'closed' ? 'bot_handling' : convo.status,
   }).eq('id', convo.id);
-  await db.from('contacts').update({ last_inbound_at: sentAt }).eq('id', contact.id);
+  await db.from('msgr_contacts').update({ last_inbound_at: sentAt }).eq('id', contact.id);
 
   // The customer answered, so any pending "chase them" task is done.
   await closeFollowUps(contact.id);
@@ -129,7 +129,7 @@ async function handleEvent(pageId: string, ev: MessagingEvent) {
 
   // A human already took this thread — never let the bot talk over them.
   if (convo.status === 'human_handling' || convo.status === 'needs_human') {
-    await db.from('conversations').update({
+    await db.from('msgr_conversations').update({
       status: 'needs_human',
       needs_human_since: convo.needs_human_since ?? sentAt,
       needs_human_reason: convo.needs_human_reason ?? 'customer replied to a human-handled thread',
@@ -151,9 +151,9 @@ async function handleEvent(pageId: string, ev: MessagingEvent) {
   await senderAction(psid, 'typing_on');
 
   const history = await recentHistory(convo.id);
-  const decision = await decide({ settings, kb: await getKb(), history, customerName: contact.name });
+  const decision = await decide({ settings, kb: await getKb(settings), history, customerName: contact.name });
 
-  await db.from('ai_runs').insert({
+  await db.from('msgr_ai_runs').insert({
     conversation_id: convo.id,
     model: decision.usage.model,
     intent: decision.intent,
@@ -169,7 +169,22 @@ async function handleEvent(pageId: string, ev: MessagingEvent) {
   const patch: Record<string, unknown> = {};
   if (decision.extracted.phone) patch.phone = decision.extracted.phone;
   if (decision.extracted.address) patch.address = decision.extracted.address;
-  if (Object.keys(patch).length) await db.from('contacts').update(patch).eq('id', contact.id);
+  if (decision.extracted.name && !contact.name) patch.name = decision.extracted.name;
+  if (!contact.store_id && settings.default_store_id) patch.store_id = settings.default_store_id;
+  if (Object.keys(patch).length) await db.from('msgr_contacts').update(patch).eq('id', contact.id);
+
+  // A draft basket the model assembled from live POS ids. It is NOT an order —
+  // staff review it in the dashboard and press the button that writes the sale.
+  if (decision.extracted.items?.length) {
+    await db.from('msgr_conversations')
+      .update({ needs_human_reason: 'ဖောက်သည်က မှာယူပြီ — order အတည်ပြုပေးရန်' })
+      .eq('id', convo.id);
+    await db.from('msgr_messages').insert({
+      conversation_id: convo.id, contact_id: contact.id,
+      direction: 'out', author: 'system', text: null,
+      ai: { draft_order: decision.extracted.items },
+    });
+  }
 
   await setStage(contact.id, contact.stage as LeadStage, decision.stage, `AI: ${decision.intent}`, 'bot');
 
@@ -199,7 +214,7 @@ async function handleEvent(pageId: string, ev: MessagingEvent) {
         },
       });
       const now = new Date().toISOString();
-      await db.from('conversations').update({
+      await db.from('msgr_conversations').update({
         outbound_count: convo.outbound_count + 1,
         bot_reply_count: convo.bot_reply_count + 1,
         last_reply_by: 'bot',
@@ -208,7 +223,7 @@ async function handleEvent(pageId: string, ev: MessagingEvent) {
           convo.first_response_seconds ??
           Math.round((Date.now() - new Date(sentAt).getTime()) / 1000),
       }).eq('id', convo.id);
-      await db.from('contacts').update({ last_outbound_at: now }).eq('id', contact.id);
+      await db.from('msgr_contacts').update({ last_outbound_at: now }).eq('id', contact.id);
     } catch (e) {
       console.error('[webhook] send failed', e);
       await handoffToHuman(convo.id, 'send failed — check the page token');
@@ -236,7 +251,7 @@ async function handleEcho(pageId: string, ev: MessagingEvent) {
   if (!psid) return;
   const db = admin();
   const { data: contact } = await db
-    .from('contacts').select('*').eq('page_id', pageId).eq('psid', psid).maybeSingle();
+    .from('msgr_contacts').select('*').eq('page_id', pageId).eq('psid', psid).maybeSingle();
   if (!contact) return;
   const convo = await getOrCreateConversation(contact.id);
 
@@ -254,7 +269,7 @@ async function handleEcho(pageId: string, ev: MessagingEvent) {
   if (!inserted) return;
 
   const now = new Date().toISOString();
-  await db.from('conversations').update({
+  await db.from('msgr_conversations').update({
     status: 'human_handling',
     last_reply_by: 'human',
     outbound_count: convo.outbound_count + 1,

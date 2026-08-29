@@ -44,7 +44,7 @@ export default async function Inbox({
           </thead>
           <tbody>
             {rows.map((r) => {
-              const c = r.contacts as unknown as {
+              const c = r.msgr_contacts as unknown as {
                 id: string; name: string | null; psid: string; stage: LeadStage;
                 phone: string | null; source_ad_id: string | null;
               };

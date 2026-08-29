@@ -28,27 +28,27 @@ export async function GET(req: NextRequest) {
   const ghostSince = new Date(now - s.ghost_hours * 3600_000).toISOString();
 
   const { data: convos } = await db
-    .from('conversations')
-    .select('id, contact_id, status, outbound_count, inbound_count, last_inbound_at, last_message_at, contacts!inner(id, stage, name)')
+    .from('msgr_conversations')
+    .select('id, contact_id, status, outbound_count, inbound_count, last_inbound_at, last_message_at, msgr_contacts!inner(id, stage, name)')
     .neq('status', 'closed')
     .lt('last_message_at', quietSince)
     .limit(500);
 
   const { data: openTasks } = await db
-    .from('follow_ups').select('contact_id').eq('status', 'pending');
+    .from('msgr_follow_ups').select('contact_id').eq('status', 'pending');
   const hasTask = new Set((openTasks ?? []).map((t) => t.contact_id));
 
   const created: string[] = [];
   const ghosted: string[] = [];
 
   for (const c of convos ?? []) {
-    const contact = (c.contacts as unknown) as { id: string; stage: string; name: string | null };
+    const contact = (c.msgr_contacts as unknown) as { id: string; stage: string; name: string | null };
     if (['won', 'lost'].includes(contact.stage)) continue;
 
     // 2. never answered at all — this is the expensive one, ads paid for it
     if ((c.outbound_count ?? 0) === 0) {
       if (!hasTask.has(contact.id)) {
-        await db.from('follow_ups').insert({
+        await db.from('msgr_follow_ups').insert({
           contact_id: contact.id, due_at: new Date().toISOString(), priority: 1,
           reason: 'ဘယ်သူမှ မပြန်ဖြေရသေးဘူး — ads ငွေကုန်ပြီး စကားမဖြစ်သွားတဲ့ lead',
         });
@@ -60,8 +60,8 @@ export async function GET(req: NextRequest) {
     // 3. ghosted
     if ((c.last_message_at ?? '') < ghostSince && !['ordered'].includes(contact.stage)) {
       if (contact.stage !== 'ghosted') {
-        await db.from('contacts').update({ stage: 'ghosted' }).eq('id', contact.id);
-        await db.from('lead_events').insert({
+        await db.from('msgr_contacts').update({ stage: 'ghosted' }).eq('id', contact.id);
+        await db.from('msgr_lead_events').insert({
           contact_id: contact.id, from_stage: contact.stage, to_stage: 'ghosted',
           reason: `no activity for ${s.ghost_hours}h`, actor: 'system',
         });
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
 
     // 1. quiet but still warm
     if (!hasTask.has(contact.id) && ['qualified', 'negotiating', 'ordered'].includes(contact.stage)) {
-      await db.from('follow_ups').insert({
+      await db.from('msgr_follow_ups').insert({
         contact_id: contact.id, due_at: new Date().toISOString(),
         priority: contact.stage === 'ordered' ? 1 : 2,
         reason: `${s.follow_up_hours} နာရီကျော် တိတ်နေတယ် (stage: ${contact.stage}) — ဆက်မေးပေးပါ`,

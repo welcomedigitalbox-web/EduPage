@@ -56,6 +56,9 @@ export interface Message {
 export interface BotSettings {
   is_enabled: boolean;
   business_name: string;
+  default_store_id: string | null;
+  quote_stock: boolean;
+  max_kb_products: number;
   language: string;
   persona: string;
   greeting: string | null;

@@ -51,10 +51,56 @@ export async function GET(req: NextRequest) {
       synced_at: new Date().toISOString(),
     }));
 
-  if (payload.length) {
-    const { error } = await admin().from('ad_insights').upsert(payload, { onConflict: 'date,ad_id' });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!payload.length) {
+    return NextResponse.json({ ok: true, synced: 0, since: fmt(since), until: fmt(until) });
   }
 
-  return NextResponse.json({ ok: true, synced: payload.length, since: fmt(since), until: fmt(until) });
+  const db = admin();
+  const { error } = await db.from('msgr_ad_daily').upsert(payload, { onConflict: 'date,ad_id' });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // ---- Roll the ad-level rows up into the POS campaign tables, so the POS
+  // Campaigns page keeps working off one synced source instead of hand entry.
+  const campaigns = new Map<string, { name: string; objective: string | null }>();
+  for (const r of payload) {
+    if (r.campaign_id) campaigns.set(r.campaign_id, { name: r.campaign_name ?? r.campaign_id, objective: null });
+  }
+
+  const { data: known } = await db
+    .from('ad_campaigns').select('id,external_id').eq('platform', 'meta')
+    .in('external_id', [...campaigns.keys()]);
+  const idByExternal = new Map((known ?? []).map((c) => [c.external_id as string, c.id as string]));
+
+  for (const [externalId, meta] of campaigns) {
+    if (idByExternal.has(externalId)) continue;
+    const firstDate = payload.filter((p) => p.campaign_id === externalId)
+      .map((p) => p.date).sort()[0];
+    const { data: created } = await db.from('ad_campaigns').insert({
+      platform: 'meta', external_id: externalId, name: meta.name,
+      start_date: firstDate, budget: 0, created_by: 'messenger-sync',
+    }).select('id').single();
+    if (created) idByExternal.set(externalId, created.id);
+  }
+
+  // campaign_id + date -> summed spend across that campaign's ads
+  const rollup = new Map<string, { campaign_id: string; stat_date: string; spend: number; impressions: number; clicks: number; reach: number }>();
+  for (const r of payload) {
+    const cid = r.campaign_id ? idByExternal.get(r.campaign_id) : undefined;
+    if (!cid) continue;
+    const k = `${cid}|${r.date}`;
+    const cur = rollup.get(k) ?? { campaign_id: cid, stat_date: r.date, spend: 0, impressions: 0, clicks: 0, reach: 0 };
+    cur.spend += r.spend;
+    cur.impressions += r.impressions;
+    cur.clicks += r.clicks;
+    cur.reach += r.reach;
+    rollup.set(k, cur);
+  }
+  if (rollup.size) {
+    await db.from('ad_daily_stats').upsert([...rollup.values()], { onConflict: 'campaign_id,stat_date' });
+  }
+
+  return NextResponse.json({
+    ok: true, synced: payload.length, campaigns: rollup.size,
+    since: fmt(since), until: fmt(until),
+  });
 }

@@ -14,10 +14,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const db = admin();
   const { data: convo } = await db
-    .from('conversations').select('*, contacts(*)').eq('id', id).single();
+    .from('msgr_conversations').select('*, msgr_contacts(*)').eq('id', id).single();
   if (!convo) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
-  const contact = convo.contacts as { id: string; psid: string };
+  const contact = convo.msgr_contacts as { id: string; psid: string };
   let mid: string | null = null;
   try {
     const sent = await sendText(contact.psid, text);
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   });
 
   const now = new Date().toISOString();
-  await db.from('conversations').update({
+  await db.from('msgr_conversations').update({
     status: 'human_handling',
     last_reply_by: 'human',
     assigned_to: agent ?? convo.assigned_to,
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     needs_human_reason: null,
     needs_human_since: null,
   }).eq('id', id);
-  await db.from('contacts').update({ last_outbound_at: now }).eq('id', contact.id);
+  await db.from('msgr_contacts').update({ last_outbound_at: now }).eq('id', contact.id);
   await closeFollowUps(contact.id);
 
   return NextResponse.json({ ok: true });

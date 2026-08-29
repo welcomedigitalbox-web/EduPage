@@ -3,7 +3,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { BotSettings } from '@/lib/types';
 
-export function SettingsForm({ initial }: { initial: BotSettings }) {
+export function SettingsForm({
+  initial, stores,
+}: { initial: BotSettings; stores: { id: string; name: string }[] }) {
   const [s, setS] = useState(initial);
   const [saved, setSaved] = useState(false);
   const router = useRouter();
@@ -22,6 +24,22 @@ export function SettingsForm({ initial }: { initial: BotSettings }) {
       <Field label="ဆိုင်နာမည်">
         <input className="inp" value={s.business_name} onChange={(e) => set('business_name', e.target.value)} />
       </Field>
+
+      <Field label="Bot က ဘယ် POS store ရဲ့ ဈေး/stock ကို ပြောမလဲ">
+        <select className="inp" value={s.default_store_id ?? ''}
+          onChange={(e) => set('default_store_id', e.target.value || null)}>
+          <option value="">— ရွေးပါ —</option>
+          {stores.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
+        </select>
+        <p className="mt-1 text-[11px] text-muted">
+          ဒါ မရွေးရင် bot က ပစ္စည်းအကြောင်း ဘာမှ မပြောနိုင်ဘဲ လူ့ဆီပဲ လွှဲပါလိမ့်မယ်။
+        </p>
+      </Field>
+
+      <label className="flex items-center justify-between">
+        <span className="text-sm">Stock အရေအတွက် အတိအကျ ပြောခွင့်ပြုမလား</span>
+        <input type="checkbox" checked={s.quote_stock} onChange={(e) => set('quote_stock', e.target.checked)} />
+      </label>
 
       <Field label="ဘာသာစကား">
         <select className="inp" value={s.language} onChange={(e) => set('language', e.target.value)}>
@@ -83,17 +101,17 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function KbEditor({ items }: { items: { id: string; kind: string; title: string; body: string; price: number | null; in_stock: boolean | null }[] }) {
+export function KbEditor({ items }: { items: { id: string; kind: string; title: string; body: string }[] }) {
   const router = useRouter();
-  const [draft, setDraft] = useState({ kind: 'product', title: '', body: '', price: '' });
+  const [draft, setDraft] = useState({ kind: 'policy', title: '', body: '' });
 
   async function save() {
     if (!draft.title || !draft.body) return;
     await fetch('/api/kb', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...draft, price: draft.price ? Number(draft.price) : null }),
+      body: JSON.stringify(draft),
     });
-    setDraft({ kind: 'product', title: '', body: '', price: '' });
+    setDraft({ kind: 'policy', title: '', body: '' });
     router.refresh();
   }
 
@@ -103,16 +121,13 @@ export function KbEditor({ items }: { items: { id: string; kind: string; title: 
         <div className="label">အသစ်ထည့်မယ်</div>
         <div className="flex gap-2">
           <select className="inp2" value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value })}>
-            <option value="product">ပစ္စည်း</option>
-            <option value="faq">FAQ</option>
             <option value="policy">စည်းကမ်း</option>
+            <option value="faq">FAQ</option>
           </select>
-          <input className="inp2 flex-1" placeholder="ခေါင်းစဉ်" value={draft.title}
+          <input className="inp2 flex-1" placeholder="ခေါင်းစဉ် (ဥပမာ — ပို့ခ)" value={draft.title}
             onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
-          <input className="inp2 w-32" placeholder="ဈေးနှုန်း" value={draft.price}
-            onChange={(e) => setDraft({ ...draft, price: e.target.value })} />
         </div>
-        <textarea className="inp2 w-full" rows={3} placeholder="အကြောင်းအရာ — bot က ဒီထဲကပဲ ဖြေပါလိမ့်မယ်"
+        <textarea className="inp2 w-full" rows={3} placeholder="အကြောင်းအရာ — ပစ္စည်းဈေး/stock က POS ကနေ တိုက်ရိုက်ယူတာမို့ ဒီမှာ မထည့်ရပါ"
           value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} />
         <button className="btn-primary" onClick={save}>ထည့်မယ်</button>
       </div>
@@ -124,8 +139,6 @@ export function KbEditor({ items }: { items: { id: string; kind: string; title: 
               <div className="text-sm">
                 <span className="mr-2 rounded bg-edge px-1.5 py-0.5 text-[11px] text-muted">{k.kind}</span>
                 {k.title}
-                {k.price != null && <span className="ml-2 text-xs text-muted">{k.price.toLocaleString()} MMK</span>}
-                {k.in_stock === false && <span className="ml-2 text-xs text-bad">ပစ္စည်းကုန်</span>}
               </div>
               <div className="mt-1 text-xs text-muted">{k.body}</div>
             </div>
