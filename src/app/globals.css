@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --surface-1: #171a21;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+}
+
+html, body {
+  background: #0f1115;
+  color: #e7e9ee;
+  font-family: ui-sans-serif, system-ui, "Segoe UI", "Padauk", "Myanmar Text", sans-serif;
+}
+
+.card { @apply rounded-xl border border-edge bg-panel; }
+.label { @apply text-xs uppercase tracking-wide text-muted; }
+.btn { @apply rounded-lg px-3 py-1.5 text-sm border border-edge bg-panel hover:border-brand transition; }
+.btn-primary { @apply rounded-lg px-3 py-1.5 text-sm bg-brand text-white hover:opacity-90 transition; }
