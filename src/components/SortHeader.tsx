@@ -32,7 +32,7 @@ export function SortHeader({
   );
 }
 
-/** Prev/next for a server-rendered table. */
+/** Numbered pagination for a server-rendered table. */
 export function Pager({
   page, pages, total, labels,
 }: {
@@ -49,14 +49,37 @@ export function Pager({
     router.push(`${pathname}?${q.toString()}`);
   }
 
+  // A window around the current page, with the first and last always reachable
+  // so 26 pages do not become 26 buttons.
+  const nums: (number | '…')[] = [];
+  const push = (n: number | '…') => { if (nums[nums.length - 1] !== n) nums.push(n); };
+  for (let p = 1; p <= pages; p++) {
+    if (p === 1 || p === pages || Math.abs(p - page) <= 2) push(p);
+    else push('…');
+  }
+
+  const btn = (active: boolean) =>
+    `min-w-[2rem] rounded-lg border px-2 py-1 text-xs ${
+      active ? 'border-brand text-brand' : 'border-edge text-muted hover:text-white'
+    }`;
+
   return (
-    <div className="flex items-center justify-between p-3 text-xs text-muted">
-      <span>{labels.of.replace('{a}', String(page)).replace('{b}', String(pages)).replace('{n}', String(total))}</span>
-      <div className="flex gap-2">
-        <button className="btn text-xs disabled:opacity-40" disabled={page <= 1}
-          onClick={() => go(page - 1)}>{labels.prev}</button>
-        <button className="btn text-xs disabled:opacity-40" disabled={page >= pages}
-          onClick={() => go(page + 1)}>{labels.next}</button>
+    <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-muted">
+      <span>
+        {labels.of.replace('{a}', String(page)).replace('{b}', String(pages)).replace('{n}', String(total))}
+      </span>
+      <div className="flex flex-wrap items-center gap-1">
+        <button className={btn(false)} disabled={page <= 1} onClick={() => go(page - 1)}
+          style={{ opacity: page <= 1 ? 0.4 : 1 }}>{labels.prev}</button>
+        {nums.map((n, i) =>
+          n === '…' ? (
+            <span key={`gap${i}`} className="px-1">…</span>
+          ) : (
+            <button key={n} className={btn(n === page)} onClick={() => go(n)}>{n}</button>
+          )
+        )}
+        <button className={btn(false)} disabled={page >= pages} onClick={() => go(page + 1)}
+          style={{ opacity: page >= pages ? 0.4 : 1 }}>{labels.next}</button>
       </div>
     </div>
   );
