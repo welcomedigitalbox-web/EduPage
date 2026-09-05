@@ -97,11 +97,12 @@ export async function conversationList(filter: string) {
       .select('*, msgr_contacts(id,name,psid,stage,phone,profile_pic,source_ad_id)')
       .neq('status', 'closed')
       .not('last_inbound_at', 'is', null)
+      // Same window the badge counts over, so the number and the list agree.
       .order('last_message_at', { ascending: false, nullsFirst: false })
-      .limit(400);
+      .limit(1000);
     return (data ?? []).filter(
       (c) => c.last_message_at && c.last_inbound_at && c.last_message_at <= c.last_inbound_at
-    ).slice(0, 100);
+    ).slice(0, 200);
   }
 
   let q = admin()
