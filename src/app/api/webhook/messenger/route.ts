@@ -127,8 +127,8 @@ async function handleEvent(pageId: string, ev: MessagingEvent) {
 
   const settings = await getSettings();
 
-  // A human already took this thread — never let the bot talk over them.
-  if (convo.status === 'human_handling' || convo.status === 'needs_human') {
+  // A human who has actually replied owns the thread — never talk over them.
+  if (convo.status === 'human_handling' || convo.human_reply_count > 0) {
     await db.from('msgr_conversations').update({
       status: 'needs_human',
       needs_human_since: convo.needs_human_since ?? sentAt,
@@ -136,6 +136,10 @@ async function handleEvent(pageId: string, ev: MessagingEvent) {
     }).eq('id', convo.id);
     return;
   }
+
+  // `needs_human` with no human reply yet is a to-do for staff, not a gag on
+  // the bot. If the next question is one the bot can answer from the knowledge
+  // base, answering beats leaving the customer waiting for a busy shop.
 
   const guard = preflightHandoff(settings, text, convo, attachments.length > 0);
   if (guard) {

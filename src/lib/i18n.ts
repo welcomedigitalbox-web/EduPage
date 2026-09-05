@@ -307,6 +307,21 @@ const D: Dict = {
   cd_discount_note: ['Loyalty tier ရွေးထားရင် POS မှာ discount အလိုအလျောက် ရပါတယ်။ Tier ထက်ပိုတဲ့ discount ဆိုရင် POS က manager PIN တောင်းပါလိမ့်မယ်။',
                      'A loyalty tier gives the discount automatically at the till. Anything beyond it makes the POS ask for a manager PIN.'],
 
+
+  // household linking
+  hh_title: ['POS ဖောက်သည်နဲ့ ချိတ်ရန်', 'Link to a POS customer'],
+  hh_sub: ['မိသားစုဝင်တွေ Facebook account သီးသန့်စီနဲ့ စာပို့ရင် — အားလုံးကို POS ဖောက်သည်တစ်ယောက်တည်းနဲ့ ချိတ်ထားလို့ရပါတယ်။ Loyalty နဲ့ ဝယ်ယူမှတ်တမ်း စုပေါင်းသွားပါမယ်။',
+          'When family members message from their own Facebook accounts, link them all to one POS customer so loyalty and purchase history stay together.'],
+  hh_search: ['POS ဖောက်သည် ရှာမယ် (နာမည် / ဖုန်း / email)', 'Search POS customers (name, phone, email)'],
+  hh_link: ['ဒီဖောက်သည်နဲ့ ချိတ်မယ်', 'Link'],
+  hh_unlink: ['ချိတ်ထားတာ ဖြုတ်မယ်', 'Unlink'],
+  hh_none_found: ['ရှာမတွေ့ပါ', 'No matches'],
+  hh_spent: ['သုံးထား {v}', 'spent {v}'],
+  hh_members: ['တူညီတဲ့ POS ဖောက်သည်နဲ့ ချိတ်ထားတဲ့ တခြား Messenger account များ', 'Other Messenger accounts on this POS customer'],
+  hh_no_members: ['တခြား account မချိတ်ရသေးပါ', 'No other accounts linked'],
+  hh_confirm_unlink: ['ချိတ်ထားတာ ဖြုတ်မှာ သေချာလား? ဝယ်ယူမှတ်တမ်း ပြန်မပေါ်တော့ပါ။',
+                      'Unlink this contact? Their purchase history will no longer show here.'],
+
   // time
   t_just_now: ['ခုနလေးတင်', 'just now'],
   t_min: ['{n} မိနစ်', '{n}m'],

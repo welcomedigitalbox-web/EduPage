@@ -140,3 +140,98 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
+
+export interface HouseholdLabels {
+  title: string; sub: string; search: string; link: string; unlink: string;
+  noneFound: string; spent: string; members: string; noMembers: string; confirmUnlink: string;
+}
+
+interface PosCustomerHit {
+  id: string; name: string; phone: string | null; email: string | null;
+  lifetime_spend: number;
+}
+
+export function HouseholdLink({
+  contactId, linkedCustomerId, household, labels, money,
+}: {
+  contactId: string;
+  linkedCustomerId: string | null;
+  household: { id: string; name: string | null; psid: string; phone: string | null }[];
+  labels: HouseholdLabels;
+  money: (n: number) => string;
+}) {
+  const router = useRouter();
+  const [q, setQ] = useState('');
+  const [hits, setHits] = useState<PosCustomerHit[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  async function search(term: string) {
+    setQ(term);
+    if (term.trim().length < 2) { setHits([]); return; }
+    const res = await fetch(`/api/pos-customers/search?q=${encodeURIComponent(term)}`);
+    const j = await res.json();
+    setHits(j.customers ?? []);
+  }
+
+  async function link(customerId: string | null) {
+    setBusy(true);
+    await fetch(`/api/contacts/${contactId}/link`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ customer_id: customerId }),
+    });
+    setBusy(false); setQ(''); setHits([]);
+    router.refresh();
+  }
+
+  return (
+    <div className="card space-y-3 p-4">
+      <div>
+        <div className="label">{labels.title}</div>
+        <p className="mt-1 text-[11px] text-muted">{labels.sub}</p>
+      </div>
+
+      <input className={INPUT} value={q} placeholder={labels.search}
+        onChange={(e) => search(e.target.value)} />
+
+      {q.trim().length >= 2 && (
+        <div className="max-h-56 overflow-y-auto rounded-lg border border-edge">
+          {hits.map((c) => (
+            <div key={c.id} className="flex items-center justify-between gap-2 border-b border-edge/50 px-2 py-1.5 text-xs last:border-0">
+              <div className="min-w-0">
+                <div className="truncate">{c.name}</div>
+                <div className="text-[11px] text-muted">
+                  {c.phone ?? c.email ?? '—'} · {labels.spent.replace('{v}', money(c.lifetime_spend))}
+                </div>
+              </div>
+              <button className="btn text-xs" disabled={busy || c.id === linkedCustomerId}
+                onClick={() => link(c.id)}>{labels.link}</button>
+            </div>
+          ))}
+          {!hits.length && <div className="px-2 py-3 text-center text-xs text-muted">{labels.noneFound}</div>}
+        </div>
+      )}
+
+      <div>
+        <div className="label mb-1">{labels.members}</div>
+        <ul className="space-y-1 text-xs text-muted">
+          {household.map((h) => (
+            <li key={h.id}>
+              <a href={`/customers/${h.id}`} className="hover:text-brand">
+                {h.name ?? `PSID ${h.psid.slice(-6)}`}
+              </a>
+              {h.phone ? ` · ${h.phone}` : ''}
+            </li>
+          ))}
+          {!household.length && <li>{labels.noMembers}</li>}
+        </ul>
+      </div>
+
+      {linkedCustomerId && (
+        <button className="btn text-xs" disabled={busy}
+          onClick={() => { if (confirm(labels.confirmUnlink)) link(null); }}>
+          {labels.unlink}
+        </button>
+      )}
+    </div>
+  );
+}

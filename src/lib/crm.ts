@@ -160,10 +160,14 @@ export async function setStage(
 }
 
 export async function handoffToHuman(conversationId: string, reason: string) {
-  await admin().from('msgr_conversations').update({
+  const db = admin();
+  const { data: convo } = await db
+    .from('msgr_conversations').select('needs_human_since').eq('id', conversationId).maybeSingle();
+  await db.from('msgr_conversations').update({
     status: 'needs_human',
     needs_human_reason: reason,
-    needs_human_since: new Date().toISOString(),
+    // Keep the original timestamp so the queue still shows how long they waited.
+    needs_human_since: convo?.needs_human_since ?? new Date().toISOString(),
   }).eq('id', conversationId);
 }
 

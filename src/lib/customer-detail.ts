@@ -30,8 +30,17 @@ export async function contactDetail(contactId: string) {
     .from('msgr_lead_events').select('*').eq('contact_id', contactId)
     .order('created_at', { ascending: false }).limit(20);
 
+  // Other Messenger accounts on the same POS customer — the rest of the household.
+  const household = contact.customer_id
+    ? await db.from('msgr_contacts')
+        .select('id,name,psid,phone,stage')
+        .eq('customer_id', contact.customer_id)
+        .neq('id', contactId)
+        .limit(20).then((r) => r.data ?? [])
+    : [];
+
   return {
     contact, conversation: convo, customer, purchases,
-    stores, tiers, reps, events: events ?? [],
+    stores, tiers, reps, events: events ?? [], household,
   };
 }

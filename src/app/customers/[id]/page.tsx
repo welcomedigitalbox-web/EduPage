@@ -4,7 +4,7 @@ import { contactDetail } from '@/lib/customer-detail';
 import { ctx } from '@/lib/server-ctx';
 import { STAGE_KEY } from '@/lib/i18n';
 import { StageBadge, money, ago } from '@/components/ui';
-import { ProfileForm } from '@/components/CustomerDetail';
+import { ProfileForm, HouseholdLink } from '@/components/CustomerDetail';
 import type { LeadStage } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +15,7 @@ export default async function CustomerDetail({ params }: { params: Promise<{ id:
   const data = await contactDetail(id);
   if (!data) notFound();
 
-  const { contact, conversation, customer, purchases, stores, tiers, reps, events } = data;
+  const { contact, conversation, customer, purchases, stores, tiers, reps, events, household } = data;
   const spent = purchases
     .filter((p) => p.order_status !== 'cancelled')
     .reduce((s, p) => s + Number(p.total || 0), 0);
@@ -76,6 +76,19 @@ export default async function CustomerDetail({ params }: { params: Promise<{ id:
             <div className="label">{t('cd_total_spent')}</div>
             <div className="mt-1 text-2xl font-semibold tabular-nums">{money(spent)}</div>
           </div>
+
+          <HouseholdLink
+            contactId={contact.id}
+            linkedCustomerId={contact.customer_id ?? null}
+            household={household}
+            money={money}
+            labels={{
+              title: t('hh_title'), sub: t('hh_sub'), search: t('hh_search'),
+              link: t('hh_link'), unlink: t('hh_unlink'), noneFound: t('hh_none_found'),
+              spent: t('hh_spent', { v: '{v}' }), members: t('hh_members'),
+              noMembers: t('hh_no_members'), confirmUnlink: t('hh_confirm_unlink'),
+            }}
+          />
 
           <div className="card p-3">
             <div className="label mb-2">{t('th_history')}</div>
