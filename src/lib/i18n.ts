@@ -69,6 +69,7 @@ const D: Dict = {
 
   // inbox
   ib_title: ['Inbox', 'Inbox'],
+  ib_unanswered: ['အဖြေ မပြန်ရသေး', 'Waiting on us'],
   ib_needs_human: ['လူ လိုက်စစ်ရမယ်', 'Needs a person'],
   ib_bot: ['Bot ပြန်ဖြေထား', 'Bot answered'],
   ib_human: ['လူ ကိုင်နေ', 'Person handling'],

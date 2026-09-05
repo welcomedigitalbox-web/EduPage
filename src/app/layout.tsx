@@ -35,7 +35,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <div className="mb-4"><LangToggle lang={lang} /></div>
               <nav className="flex-1 space-y-1">
                 {NAV.filter((n) => !n.managerOnly || session.role === 'manager').map((n) => (
-                  <Link key={n.href} href={n.href}
+                  <Link key={n.href}
+                    href={n.href === '/inbox' ? '/inbox?filter=unanswered' : n.href}
                     className="flex items-center rounded-lg px-3 py-2 text-sm text-muted hover:bg-edge hover:text-white">
                     {t(n.key)}
                     {n.href === '/inbox' && <InboxBadge />}

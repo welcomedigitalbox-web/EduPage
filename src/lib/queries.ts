@@ -89,6 +89,21 @@ export async function adPerformance() {
 }
 
 export async function conversationList(filter: string) {
+  // "Waiting on us" is a comparison between two columns, which PostgREST
+  // cannot express as a filter — so fetch a wider slice and narrow it here.
+  if (filter === 'unanswered') {
+    const { data } = await admin()
+      .from('msgr_conversations')
+      .select('*, msgr_contacts(id,name,psid,stage,phone,profile_pic,source_ad_id)')
+      .neq('status', 'closed')
+      .not('last_inbound_at', 'is', null)
+      .order('last_message_at', { ascending: false, nullsFirst: false })
+      .limit(400);
+    return (data ?? []).filter(
+      (c) => c.last_message_at && c.last_inbound_at && c.last_message_at <= c.last_inbound_at
+    ).slice(0, 100);
+  }
+
   let q = admin()
     .from('msgr_conversations')
     .select('*, msgr_contacts(id,name,psid,stage,phone,profile_pic,source_ad_id)')

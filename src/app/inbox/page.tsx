@@ -8,6 +8,7 @@ import type { LeadStage } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 
 const TABS = [
+  { key: 'unanswered', label: 'ib_unanswered' },
   { key: 'needs_human', label: 'ib_needs_human' },
   { key: 'bot', label: 'ib_bot' },
   { key: 'human', label: 'ib_human' },
