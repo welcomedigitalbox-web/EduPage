@@ -121,6 +121,7 @@ export interface CustomerRow {
   name: string | null;
   psid: string;
   phone: string | null;
+  email: string | null;
   address: string | null;
   stage: string;
   tags: string[];
@@ -141,7 +142,7 @@ export async function customerList(opts: {
   const db = admin();
   let query = db
     .from('msgr_contacts')
-    .select('id,name,psid,phone,address,stage,tags,notes,source_type,source_ad_id,customer_id,first_seen_at,last_inbound_at')
+    .select('id,name,psid,phone,email,address,stage,tags,notes,source_type,source_ad_id,customer_id,first_seen_at,last_inbound_at')
     .order('last_inbound_at', { ascending: false, nullsFirst: false })
     .limit(opts.limit ?? 300);
 
@@ -175,7 +176,7 @@ export async function customerList(opts: {
   return rows.map((r) => ({
     contact_id: r.id,
     conversation_id: convoOf.get(r.id) ?? null,
-    name: r.name, psid: r.psid, phone: r.phone, address: r.address,
+    name: r.name, psid: r.psid, phone: r.phone, email: r.email, address: r.address,
     stage: r.stage, tags: r.tags ?? [], notes: r.notes,
     source_type: r.source_type, source_ad_id: r.source_ad_id,
     customer_id: r.customer_id,

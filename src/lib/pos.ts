@@ -172,6 +172,7 @@ export async function createPendingSale(args: {
   address: string | null;
   lines: OrderLine[];
   note?: string | null;
+  saleRepId?: string | null;
 }) {
   const db = admin();
   const subtotal = args.lines.reduce((s, l) => s + l.qty * l.unit_price, 0);
@@ -195,6 +196,7 @@ export async function createPendingSale(args: {
     payment_method: 'cod',
     channel: 'messenger',
     order_status: 'pending',
+    sale_rep_id: args.saleRepId ?? null,
     note: args.note ?? 'Messenger AI မှတစ်ဆင့် ဝင်လာသော order',
   }).select('id,sale_ref,total').single();
   if (error) throw error;
@@ -219,4 +221,98 @@ export async function createPendingSale(args: {
     }
   }
   return sale;
+}
+
+
+export interface LoyaltyTier { id: string; store_id: string; name: string; discount_percent: number }
+export interface SalesRep { id: string; store_id: string; name: string }
+
+export async function fetchLoyaltyTiers(): Promise<LoyaltyTier[]> {
+  const { data } = await admin()
+    .from('loyalty_tiers').select('id,store_id,name,discount_percent').order('sort_order');
+  return (data ?? []) as LoyaltyTier[];
+}
+
+export async function fetchSalesReps(): Promise<SalesRep[]> {
+  const { data } = await admin()
+    .from('sales_reps').select('id,store_id,name').eq('is_active', true).order('name');
+  return (data ?? []) as SalesRep[];
+}
+
+export interface PosCustomer {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  delivery_address: string | null;
+  facebook: string | null;
+  loyalty_tier_id: string | null;
+  store_id: string;
+}
+
+/** Finds an existing POS customer by phone or email before creating another
+ *  one — a duplicate record is how loyalty history quietly gets lost. */
+export async function findCustomer(opts: {
+  phone?: string | null; email?: string | null; psid?: string | null;
+}): Promise<PosCustomer | null> {
+  const db = admin();
+  const cols = 'id,name,phone,email,delivery_address,facebook,loyalty_tier_id,store_id';
+
+  if (opts.phone) {
+    const digits = opts.phone.replace(/\D/g, '').slice(-9);
+    if (digits.length >= 7) {
+      const { data } = await db.from('customers').select(cols).ilike('phone', `%${digits}`).limit(1).maybeSingle();
+      if (data) return data as PosCustomer;
+    }
+  }
+  if (opts.email) {
+    const { data } = await db.from('customers').select(cols).ilike('email', opts.email.trim()).limit(1).maybeSingle();
+    if (data) return data as PosCustomer;
+  }
+  if (opts.psid) {
+    const { data } = await db.from('customers').select(cols).eq('facebook', `psid:${opts.psid}`).limit(1).maybeSingle();
+    if (data) return data as PosCustomer;
+  }
+  return null;
+}
+
+export async function upsertPosCustomer(args: {
+  customerId: string | null;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  storeId: string;
+  loyaltyTierId: string | null;
+  psid: string | null;
+}): Promise<PosCustomer> {
+  const db = admin();
+  const row = {
+    name: args.name,
+    phone: args.phone,
+    email: args.email,
+    delivery_address: args.address,
+    store_id: args.storeId,
+    loyalty_tier_id: args.loyaltyTierId,
+    facebook: args.psid ? `psid:${args.psid}` : null,
+  };
+
+  const { data, error } = args.customerId
+    ? await db.from('customers').update(row).eq('id', args.customerId)
+        .select('id,name,phone,email,delivery_address,facebook,loyalty_tier_id,store_id').single()
+    : await db.from('customers').insert(row)
+        .select('id,name,phone,email,delivery_address,facebook,loyalty_tier_id,store_id').single();
+  if (error) throw error;
+  return data as PosCustomer;
+}
+
+/** Everything this person has ever bought in the POS, online or in store. */
+export async function customerPurchases(customerId: string) {
+  const { data } = await admin()
+    .from('sales')
+    .select('id,sale_ref,total,created_at,store_id,channel,order_status,payment_method')
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  return data ?? [];
 }

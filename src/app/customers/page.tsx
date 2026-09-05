@@ -3,7 +3,7 @@ import { customerList } from '@/lib/queries';
 import { StageBadge, ago, money, num } from '@/components/ui';
 import { ctx } from '@/lib/server-ctx';
 import { STAGE_KEY } from '@/lib/i18n';
-import { CustomerFilters, ProfileEditor } from '@/components/Customers';
+import { CustomerFilters } from '@/components/Customers';
 import type { LeadStage } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -62,7 +62,10 @@ export default async function Customers({
             {rows.map((r) => (
               <tr key={r.contact_id} className="border-b border-edge/60 align-top hover:bg-edge/30">
                 <td className="p-3">
-                  <div>{r.name ?? `PSID ${r.psid.slice(-6)}`}</div>
+                  <Link href={`/customers/${r.contact_id}`} className="hover:text-brand">
+                    {r.name ?? `PSID ${r.psid.slice(-6)}`}
+                  </Link>
+                  {r.email && <div className="text-[11px] text-muted">{r.email}</div>}
                   {r.customer_id && <div className="text-[11px] text-good">{t('cu_pos_linked')}</div>}
                   {r.notes && <div className="mt-1 max-w-[16rem] truncate text-[11px] text-muted">{r.notes}</div>}
                 </td>
@@ -88,14 +91,7 @@ export default async function Customers({
                     {r.conversation_id && (
                       <Link href={`/inbox/${r.conversation_id}`} className="btn text-xs">{t('cu_open_chat')}</Link>
                     )}
-                    <ProfileEditor
-                      contactId={r.contact_id}
-                      initial={{ tags: r.tags, notes: r.notes ?? '', phone: r.phone ?? '' }}
-                      labels={{
-                        edit: t('cu_edit'), tagsPh: t('cu_tags_ph'), notesPh: t('cu_notes_ph'),
-                        phone: t('cu_phone'), save: t('cu_save'), cancel: t('cu_cancel'), saved: t('cu_saved'),
-                      }}
-                    />
+                    <Link href={`/customers/${r.contact_id}`} className="btn text-xs">{t('cu_edit')}</Link>
                   </div>
                 </td>
               </tr>

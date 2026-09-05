@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   const { data: contact } = await db
     .from('msgr_contacts')
-    .select('id,name,phone,address,stage,store_id,customer_id,source_ad_id,source_campaign_id,psid')
+    .select('id,name,phone,email,address,stage,store_id,customer_id,source_ad_id,source_campaign_id,psid,preferred_rep_id')
     .eq('id', b.contact_id).single();
   if (!contact) return NextResponse.json({ error: 'contact not found' }, { status: 404 });
 
@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
       address: contact.address ?? null,
       lines: b.lines,
       note: b.note ?? null,
+      saleRepId: contact.preferred_rep_id ?? null,
     });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 400 });
