@@ -4,7 +4,9 @@ import { env } from '@/lib/env';
 import { fetchPageDaily, fetchPosts, probeMetrics, probePostMetrics } from '@/lib/page-insights';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+// Fetching several pages of posts plus per-post insights takes longer than
+// the default ceiling. Pro allows up to 300s.
+export const maxDuration = 300;
 
 function authorised(req: NextRequest) {
   const secret = env.cronSecret();
@@ -47,7 +49,11 @@ export async function GET(req: NextRequest) {
   let daily, posts;
   try {
     daily = await fetchPageDaily(since, until);
-    posts = await fetchPosts(since, Number(req.nextUrl.searchParams.get('posts') ?? 500));
+    posts = await fetchPosts(
+      since,
+      Number(req.nextUrl.searchParams.get('posts') ?? 300),
+      Number(req.nextUrl.searchParams.get('insights') ?? 40)
+    );
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 502 });
   }
