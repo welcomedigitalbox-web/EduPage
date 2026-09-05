@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   let daily, posts;
   try {
     daily = await fetchPageDaily(since, until);
-    posts = await fetchPosts(Number(req.nextUrl.searchParams.get('posts') ?? 25));
+    posts = await fetchPosts(since, Number(req.nextUrl.searchParams.get('posts') ?? 500));
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 502 });
   }

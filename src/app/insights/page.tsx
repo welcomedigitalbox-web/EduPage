@@ -1,6 +1,7 @@
 import { admin } from '@/lib/supabase';
 import { ctx } from '@/lib/server-ctx';
 import { Stat, BarChart, num } from '@/components/ui';
+import { SortHeader, Pager } from '@/components/SortHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,16 +17,19 @@ interface PostRow {
 
 export default async function Insights({
   searchParams,
-}: { searchParams: Promise<{ days?: string }> }) {
+}: {
+  searchParams: Promise<{ days?: string; sort?: string; dir?: string; page?: string }>;
+}) {
   const { t, lang } = await ctx();
-  const days = Number((await searchParams).days ?? 30);
+  const sp = await searchParams;
+  const days = Number(sp.days ?? 30);
   const from = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
 
   const db = admin();
   const [dayRes, postRes] = await Promise.all([
     db.from('msgr_page_daily').select('*').gte('date', from).order('date'),
     db.from('msgr_page_posts').select('*').gte('created_time', from)
-      .order('created_time', { ascending: false }).limit(100),
+      .order('created_time', { ascending: false }).limit(500),
   ]);
   const rows = (dayRes.data ?? []) as DayRow[];
   const posts = (postRes.data ?? []) as PostRow[];
@@ -44,6 +48,27 @@ export default async function Insights({
   );
 
   const secs = (ms: number) => (ms > 0 ? `${(ms / 1000).toFixed(1)}s` : '—');
+
+  // Sorting and paging happen here rather than in SQL: "engagements" is a sum
+  // of three columns, and a period never holds more than a few hundred posts.
+  const eng = (p: PostRow) => Number(p.reactions) + Number(p.comments) + Number(p.shares);
+  const sort = sp.sort ?? 'created_time';
+  const dir = sp.dir === 'asc' ? 'asc' : 'desc';
+  const value = (p: PostRow): number | string =>
+    sort === 'created_time' ? p.created_time
+    : sort === 'engagements' ? eng(p)
+    : Number((p as unknown as Record<string, number>)[sort] ?? 0);
+  const sorted = [...posts].sort((a, b) => {
+    const x = value(a), y = value(b);
+    const c = typeof x === 'string' ? String(x).localeCompare(String(y)) : (x as number) - (y as number);
+    return dir === 'asc' ? c : -c;
+  });
+
+  const PER_PAGE = 10;
+  const pages = Math.max(1, Math.ceil(sorted.length / PER_PAGE));
+  const page = Math.min(Math.max(1, Number(sp.page ?? 1)), pages);
+  const shown = sorted.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const pagerLabels = { prev: t('pg_prev'), next: t('pg_next'), of: t('pg_of') };
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString(lang === 'en' ? 'en-GB' : 'my-MM',
@@ -105,20 +130,22 @@ export default async function Insights({
         <table className="w-full min-w-[56rem] text-sm">
           <thead className="text-muted">
             <tr className="border-b border-edge">
-              <th className="p-3 text-left font-normal">{t('pi_post')}</th>
-              <th className="p-3 text-left font-normal">{t('pi_date')}</th>
-              <th className="p-3 text-right font-normal">{t('pi_reactions')}</th>
-              <th className="p-3 text-right font-normal">{t('pi_comments')}</th>
-              <th className="p-3 text-right font-normal">{t('pi_shares')}</th>
-              <th className="p-3 text-right font-normal">{t('pi_clicks')}</th>
-              <th className="p-3 text-right font-normal">{t('pi_views')}</th>
-              <th className="p-3 text-right font-normal">{t('pi_avg_watch')}</th>
-              <th className="p-3 text-right font-normal">{t('pi_engagements')}</th>
+              <SortHeader field="message" label={t('pi_post')} align="left"
+                          active={sort === 'message'} dir={dir} />
+              <SortHeader field="created_time" label={t('pi_date')} align="left"
+                          active={sort === 'created_time'} dir={dir} />
+              <SortHeader field="reactions" label={t('pi_reactions')} active={sort === 'reactions'} dir={dir} />
+              <SortHeader field="comments" label={t('pi_comments')} active={sort === 'comments'} dir={dir} />
+              <SortHeader field="shares" label={t('pi_shares')} active={sort === 'shares'} dir={dir} />
+              <SortHeader field="clicks" label={t('pi_clicks')} active={sort === 'clicks'} dir={dir} />
+              <SortHeader field="video_views" label={t('pi_views')} active={sort === 'video_views'} dir={dir} />
+              <SortHeader field="avg_watch_ms" label={t('pi_avg_watch')} active={sort === 'avg_watch_ms'} dir={dir} />
+              <SortHeader field="engagements" label={t('pi_engagements')} active={sort === 'engagements'} dir={dir} />
             </tr>
           </thead>
           <tbody className="tabular-nums">
-            {posts.map((p) => {
-              const eng = Number(p.reactions) + Number(p.comments) + Number(p.shares);
+            {shown.map((p) => {
+              const total = eng(p);
               return (
                 <tr key={p.post_id} className="border-b border-edge/50 last:border-0">
                   <td className="max-w-[22rem] p-3">
@@ -143,11 +170,11 @@ export default async function Insights({
                   <td className="p-3 text-right text-muted">{num(Number(p.clicks))}</td>
                   <td className="p-3 text-right text-muted">{num(Number(p.video_views))}</td>
                   <td className="p-3 text-right text-muted">{secs(Number(p.avg_watch_ms))}</td>
-                  <td className="p-3 text-right font-medium">{num(eng)}</td>
+                  <td className="p-3 text-right font-medium">{num(total)}</td>
                 </tr>
               );
             })}
-            {!posts.length && (
+            {!shown.length && (
               <tr><td colSpan={9} className="p-6 text-center text-muted">{t('pi_no_posts')}</td></tr>
             )}
           </tbody>

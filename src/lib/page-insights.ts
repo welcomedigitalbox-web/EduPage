@@ -178,32 +178,52 @@ export interface PostRow {
   view_time_ms: number;
 }
 
-/** Recent posts with their engagement. Counts come from the post edge itself;
- *  reach and impressions need a second call per post. */
-export async function fetchPosts(limit = 25): Promise<PostRow[]> {
+/**
+ * Posts published since a date, with their engagement. The list endpoint is
+ * paginated (25 a page by default), so a shop that posts daily needs several
+ * pages to cover 90 days — asking for one page is why every range showed the
+ * same 25 rows.
+ *
+ * Per-post insights cost one call each, so they are fetched only for the
+ * newest `withInsights` posts; the rest still carry reactions, comments and
+ * shares, which come free with the list.
+ */
+export async function fetchPosts(
+  since: string, cap = 500, withInsights = 80
+): Promise<PostRow[]> {
   const token = await pageToken();
   const params = new URLSearchParams({
     fields: [
       'id', 'created_time', 'message', 'permalink_url', 'status_type',
       'shares', 'comments.summary(true).limit(0)', 'reactions.summary(true).limit(0)',
     ].join(','),
-    limit: String(limit),
+    limit: '50',
+    since,
     access_token: token,
   });
-  const res = await fetch(`${graph(`${env.fbPageId()}/posts`)}?${params}`);
-  const json = await res.json() as {
-    data?: {
-      id: string; created_time: string; message?: string; permalink_url?: string;
-      status_type?: string; shares?: { count?: number };
-      comments?: { summary?: { total_count?: number } };
-      reactions?: { summary?: { total_count?: number } };
-    }[];
-    error?: { message?: string };
-  };
-  if (json.error) throw new Error(`posts failed: ${json.error.message}`);
+
+  interface Raw {
+    id: string; created_time: string; message?: string; permalink_url?: string;
+    status_type?: string; shares?: { count?: number };
+    comments?: { summary?: { total_count?: number } };
+    reactions?: { summary?: { total_count?: number } };
+  }
+
+  const raw: Raw[] = [];
+  let url = `${graph(`${env.fbPageId()}/posts`)}?${params}`;
+  for (let page = 0; page < 25 && url && raw.length < cap; page++) {
+    const res = await fetch(url);
+    const json = await res.json() as { data?: Raw[]; paging?: { next?: string }; error?: { message?: string } };
+    if (json.error) throw new Error(`posts failed: ${json.error.message}`);
+    const batch = json.data ?? [];
+    raw.push(...batch);
+    // Stop as soon as we are past the window, whatever paging still offers.
+    if (batch.length && batch[batch.length - 1].created_time.slice(0, 10) < since) break;
+    url = json.paging?.next ?? '';
+  }
 
   const posts: PostRow[] = [];
-  for (const p of json.data ?? []) {
+  for (const [i, p] of raw.slice(0, cap).entries()) {
     const row: PostRow = {
       post_id: p.id,
       created_time: p.created_time,
@@ -218,23 +238,24 @@ export async function fetchPosts(limit = 25): Promise<PostRow[]> {
       avg_watch_ms: 0,
       view_time_ms: 0,
     };
-    try {
-      const ip = new URLSearchParams({
-        metric: 'post_clicks,post_video_views,post_video_avg_time_watched,post_video_view_time',
-        access_token: token,
-      });
-      const r = await fetch(`${graph(`${p.id}/insights`)}?${ip}`);
-      const j = await r.json() as { data?: { name: string; values: { value: number }[] }[] };
-      for (const m of j.data ?? []) {
-        const v = Number(m.values?.[0]?.value ?? 0);
-        if (m.name === 'post_clicks') row.clicks = v;
-        if (m.name === 'post_video_views') row.video_views = v;
-        if (m.name === 'post_video_avg_time_watched') row.avg_watch_ms = v;
-        if (m.name === 'post_video_view_time') row.view_time_ms = v;
+    if (i < withInsights) {
+      try {
+        const ip = new URLSearchParams({
+          metric: 'post_clicks,post_video_views,post_video_avg_time_watched,post_video_view_time',
+          access_token: token,
+        });
+        const r = await fetch(`${graph(`${p.id}/insights`)}?${ip}`);
+        const j = await r.json() as { data?: { name: string; values: { value: number }[] }[] };
+        for (const m of j.data ?? []) {
+          const v = Number(m.values?.[0]?.value ?? 0);
+          if (m.name === 'post_clicks') row.clicks = v;
+          if (m.name === 'post_video_views') row.video_views = v;
+          if (m.name === 'post_video_avg_time_watched') row.avg_watch_ms = v;
+          if (m.name === 'post_video_view_time') row.view_time_ms = v;
+        }
+      } catch {
+        // A post Meta does not measure still belongs in the table.
       }
-    } catch {
-      // A post with no insights (too new, or a type Meta does not measure)
-      // still belongs in the table with its comment and reaction counts.
     }
     posts.push(row);
   }
