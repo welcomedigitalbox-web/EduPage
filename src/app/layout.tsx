@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ctx } from '@/lib/server-ctx';
 import { LangToggle, SignOut } from '@/components/TopBar';
+import { InboxBadge } from '@/components/NavBadge';
 
 export const metadata: Metadata = {
   title: 'Messenger AI CRM',
@@ -35,8 +36,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <nav className="flex-1 space-y-1">
                 {NAV.filter((n) => !n.managerOnly || session.role === 'manager').map((n) => (
                   <Link key={n.href} href={n.href}
-                    className="block rounded-lg px-3 py-2 text-sm text-muted hover:bg-edge hover:text-white">
+                    className="flex items-center rounded-lg px-3 py-2 text-sm text-muted hover:bg-edge hover:text-white">
                     {t(n.key)}
+                    {n.href === '/inbox' && <InboxBadge />}
                   </Link>
                 ))}
               </nav>

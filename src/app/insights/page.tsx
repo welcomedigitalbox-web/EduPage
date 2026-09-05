@@ -179,6 +179,7 @@ export default async function Insights({
             )}
           </tbody>
         </table>
+        {pages > 1 && <Pager page={page} pages={pages} total={sorted.length} labels={pagerLabels} />}
       </section>
     </div>
   );
