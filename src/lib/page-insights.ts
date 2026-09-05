@@ -83,12 +83,20 @@ export async function probeMetrics(
   return out;
 }
 
-/** Same, for one post. */
+/** Same, for one post. Asked one metric at a time: Meta rejects the whole
+ *  request if any single name in the list is retired. */
 export async function probePostMetrics(postId: string, metrics: string[]) {
   const token = await pageToken();
-  const params = new URLSearchParams({ metric: metrics.join(','), access_token: token });
-  const res = await fetch(`${graph(`${postId}/insights`)}?${params}`);
-  return res.json();
+  const out: Record<string, unknown> = {};
+  for (const m of metrics) {
+    const params = new URLSearchParams({ metric: m, access_token: token });
+    const res = await fetch(`${graph(`${postId}/insights`)}?${params}`);
+    const j = await res.json() as {
+      data?: { name: string; values?: { value: unknown }[] }[]; error?: { message?: string };
+    };
+    out[m] = j.error ? { error: j.error.message } : { value: j.data?.[0]?.values?.[0]?.value ?? null };
+  }
+  return out;
 }
 
 export interface PageDay {

@@ -24,17 +24,21 @@ export async function GET(req: NextRequest) {
   // ?probe=1 answers "which metric names does Meta still honour today"
   if (req.nextUrl.searchParams.get('probe')) {
     const page = await probeMetrics([
-      'page_impressions', 'page_impressions_unique',
-      'page_impressions_organic_v2', 'page_posts_impressions',
-      'page_posts_impressions_unique', 'page_post_engagements',
-      'page_daily_follows', 'page_video_views', 'page_views_total',
+      // Reach candidates, newest naming first
+      'page_daily_reach', 'page_reach', 'page_content_reach',
+      'page_total_reach', 'page_organic_reach', 'page_engaged_users',
+      'page_content_activity', 'page_total_actions',
+      'page_fans', 'page_fan_adds', 'page_follows',
+      'page_video_views_unique', 'page_posts_served_impressions_organic_unique',
     ], since, until);
     const { data: p } = await db.from('msgr_page_posts')
       .select('post_id').order('created_time', { ascending: false }).limit(1).maybeSingle();
     const post = p?.post_id
       ? await probePostMetrics(p.post_id, [
-          'post_impressions', 'post_impressions_unique', 'post_impressions_organic',
+          'post_impressions', 'post_impressions_unique', 'post_reach',
           'post_clicks', 'post_video_views', 'post_reactions_by_type_total',
+          'post_activity', 'post_engaged_users', 'post_video_avg_time_watched',
+          'blue_reels_play_count', 'post_video_view_time',
         ])
       : { note: 'no post stored yet' };
     return NextResponse.json({ page, post });
