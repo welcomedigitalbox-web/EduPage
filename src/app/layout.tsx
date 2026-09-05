@@ -15,6 +15,7 @@ const NAV = [
   { href: '/customers', key: 'nav_customers', managerOnly: false },
   { href: '/followups', key: 'nav_followups', managerOnly: false },
   { href: '/ads', key: 'nav_ads', managerOnly: true },
+  { href: '/insights', key: 'nav_insights', managerOnly: true },
   { href: '/usage', key: 'nav_usage', managerOnly: true },
   { href: '/settings', key: 'nav_settings', managerOnly: true },
 ];

@@ -11,7 +11,7 @@ export interface Session {
 }
 
 /** Pages an agent may not open. Managers see everything. */
-export const MANAGER_ONLY = ['/ads', '/settings', '/usage'];
+export const MANAGER_ONLY = ['/ads', '/settings', '/usage', '/insights'];
 
 export function canOpen(role: Role, pathname: string): boolean {
   if (role === 'manager') return true;
