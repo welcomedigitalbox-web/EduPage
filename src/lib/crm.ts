@@ -27,6 +27,7 @@ export async function getSettings(): Promise<BotSettings> {
     quote_stock: true, max_kb_products: 120, language: 'my',
     persona: 'Friendly, concise Burmese shop assistant.', greeting: null,
     handoff_message: 'ဒီအကြောင်းလေးကို သေချာစစ်ပြီး admin မှ မကြာခင် ပြန်ဖြေပေးပါမယ်ရှင် 🙏',
+    ad_currency: 'USD', mmk_per_usd: 4500,
     handoff_keywords: [], office_hours: null, min_confidence: 0.6,
     max_bot_turns: 20, follow_up_hours: 4, ghost_hours: 48,
   }) as BotSettings;

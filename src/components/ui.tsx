@@ -102,9 +102,11 @@ export function ConvoLink({ id, children }: { id: string; children: React.ReactN
   return <Link href={`/inbox/${id}`} className="hover:text-brand">{children}</Link>;
 }
 
-export function money(n: number | null | undefined, cur = 'MMK') {
+export function money(n: number | null | undefined, cur = 'MMK', digits = 0) {
   if (n == null) return '—';
-  return `${Math.round(n).toLocaleString()} ${cur}`;
+  // Sub-unit amounts (a $0.30 cost per lead) round to nothing without decimals.
+  const d = digits || (cur !== 'MMK' && Math.abs(n) < 10 ? 2 : 0);
+  return `${n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d })} ${cur}`;
 }
 export function num(n: number | null | undefined, digits = 0) {
   if (n == null) return '—';

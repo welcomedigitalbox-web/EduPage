@@ -1,11 +1,14 @@
 import { adPerformance } from '@/lib/queries';
 import { money, num } from '@/components/ui';
 import { ctx } from '@/lib/server-ctx';
+import { getSettings } from '@/lib/crm';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Ads() {
   const { t } = await ctx();
+  const settings = await getSettings();
+  const cur = settings.ad_currency || 'USD';
   const rows = await adPerformance();
   const total = rows.reduce(
     (a, r) => ({
@@ -50,14 +53,14 @@ export default async function Ads() {
                     <div className="max-w-[18rem] truncate">{r.ad_name ?? r.ad_id}</div>
                     <div className="max-w-[18rem] truncate text-xs text-muted">{r.campaign_name ?? ''}</div>
                   </td>
-                  <td className="p-3 text-right">{money(Number(r.spend))}</td>
+                  <td className="p-3 text-right">{money(Number(r.spend), cur)}</td>
                   <td className="p-3 text-right">{num(Number(r.meta_conversations))}</td>
                   <td className="p-3 text-right">{num(Number(r.leads))}</td>
                   <td className="p-3 text-right">{num(Number(r.qualified_leads))}</td>
                   <td className="p-3 text-right">{num(Number(r.orders))}</td>
                   <td className="p-3 text-right">{money(Number(r.revenue))}</td>
-                  <td className="p-3 text-right">{r.cost_per_lead != null ? money(Number(r.cost_per_lead)) : '—'}</td>
-                  <td className="p-3 text-right">{r.cost_per_order != null ? money(Number(r.cost_per_order)) : '—'}</td>
+                  <td className="p-3 text-right">{r.cost_per_lead != null ? money(Number(r.cost_per_lead), cur, 2) : '—'}</td>
+                  <td className="p-3 text-right">{r.cost_per_order != null ? money(Number(r.cost_per_order), cur, 2) : '—'}</td>
                   <td className={`p-3 text-right font-medium ${tone}`}>{roas != null ? `${roas.toFixed(2)}x` : '—'}</td>
                 </tr>
               );
@@ -70,14 +73,14 @@ export default async function Ads() {
             <tfoot className="border-t-2 border-edge text-sm font-medium tabular-nums">
               <tr>
                 <td className="p-3">{t('ad_total')}</td>
-                <td className="p-3 text-right">{money(total.spend)}</td>
+                <td className="p-3 text-right">{money(total.spend, cur)}</td>
                 <td className="p-3" />
                 <td className="p-3 text-right">{num(total.leads)}</td>
                 <td className="p-3" />
                 <td className="p-3 text-right">{num(total.orders)}</td>
                 <td className="p-3 text-right">{money(total.revenue)}</td>
-                <td className="p-3 text-right">{total.leads ? money(total.spend / total.leads) : '—'}</td>
-                <td className="p-3 text-right">{total.orders ? money(total.spend / total.orders) : '—'}</td>
+                <td className="p-3 text-right">{total.leads ? money(total.spend / total.leads, cur, 2) : '—'}</td>
+                <td className="p-3 text-right">{total.orders ? money(total.spend / total.orders, cur, 2) : '—'}</td>
                 <td className="p-3 text-right">{total.spend ? `${(total.revenue / total.spend).toFixed(2)}x` : '—'}</td>
               </tr>
             </tfoot>

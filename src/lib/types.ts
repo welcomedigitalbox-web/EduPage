@@ -64,6 +64,8 @@ export interface BotSettings {
   persona: string;
   greeting: string | null;
   handoff_message: string | null;
+  ad_currency: string;
+  mmk_per_usd: number;
   handoff_keywords: string[];
   office_hours: string | null;
   min_confidence: number;

@@ -1,4 +1,5 @@
 import { overview, dailyFunnel, stageCounts } from '@/lib/queries';
+import { getSettings } from '@/lib/crm';
 import { Stat, BarChart, Funnel, money, num } from '@/components/ui';
 import { ctx } from '@/lib/server-ctx';
 import Link from 'next/link';
@@ -12,8 +13,10 @@ export default async function Overview({
   const sp = await searchParams;
   const days = Number(sp.days ?? 30);
 
+  const settings = await getSettings();
+  const cur = settings.ad_currency || 'USD';
   const [o, daily, stages] = await Promise.all([
-    overview(days), dailyFunnel(days), stageCounts(days),
+    overview(days, Number(settings.mmk_per_usd) || 4500), dailyFunnel(days), stageCounts(days),
   ]);
 
   const short = (d: string) => d.slice(5);
@@ -44,9 +47,9 @@ export default async function Overview({
       </section>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label={t('ov_spend')} value={money(o.spend)} />
-        <Stat label={t('ov_cpl')} value={money(o.costPerLead)} />
-        <Stat label={t('ov_cpa')} value={money(o.costPerOrder)}
+        <Stat label={t('ov_spend')} value={money(o.spend, cur)} />
+        <Stat label={t('ov_cpl')} value={money(o.costPerLead, cur, 2)} />
+        <Stat label={t('ov_cpa')} value={money(o.costPerOrder, cur, 2)}
               tone={o.costPerOrder && o.revenue / Math.max(o.orders, 1) < o.costPerOrder ? 'bad' : undefined} />
         <Stat label={t('ov_roas')} value={o.roas != null ? `${o.roas.toFixed(2)}x` : '—'}
               tone={o.roas == null ? undefined : o.roas >= 2 ? 'good' : o.roas >= 1 ? 'warn' : 'bad'}
@@ -69,7 +72,7 @@ export default async function Overview({
                     color="var(--series-1)" />
         </div>
         <div className="card p-4">
-          <div className="label mb-3">{t('ov_chart_spend')}</div>
+          <div className="label mb-3">{t('ov_chart_spend', { cur })}</div>
           <BarChart data={daily.map((d) => ({ label: short(d.day), value: Number(d.spend) }))}
                     color="var(--series-2)" format={(n) => Math.round(n).toLocaleString()} />
         </div>

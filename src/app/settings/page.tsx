@@ -39,6 +39,7 @@ export default async function Settings() {
             langMixed: L('se_lang_mixed'), persona: L('se_persona'), handoffMsg: L('se_handoff_msg'), handoff: L('se_handoff'),
             minConf: L('se_min_conf'), maxTurns: L('se_max_turns'),
             followupHours: L('se_followup_hours'), ghostHours: L('se_ghost_hours'),
+            adCurrency: L('se_ad_currency'), fxRate: L('se_fx_rate'),
             save: L('se_save'), saved: L('se_saved'),
           }}
         />

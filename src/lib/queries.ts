@@ -22,7 +22,7 @@ export async function stageCounts(days = 30) {
 }
 
 /** The headline numbers. Every one of these maps to a question Kay asked. */
-export async function overview(days = 30) {
+export async function overview(days = 30, mmkPerUsd = 4500) {
   const db = admin();
   const fromIso = new Date(Date.now() - days * 86400_000).toISOString();
   const fromDay = fromIso.slice(0, 10);
@@ -59,7 +59,10 @@ export async function overview(days = 30) {
     spend,
     costPerLead: leads ? spend / leads : null,
     costPerOrder: orderCount ? spend / orderCount : null,
-    roas: spend ? revenue / spend : null,
+    // Spend is billed in the ad account's currency (USD) while POS revenue is
+    // MMK, so ROAS has to convert before dividing or the number is nonsense.
+    roas: spend ? (revenue / mmkPerUsd) / spend : null,
+    revenueUsd: revenue / mmkPerUsd,
     convRate: leads ? (orderCount / leads) * 100 : null,
     needsHuman: needsHuman.count ?? 0,
     botHandled: botHandled.count ?? 0,
