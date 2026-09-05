@@ -101,11 +101,12 @@ export async function probePostMetrics(postId: string, metrics: string[]) {
 
 export interface PageDay {
   date: string;
-  impressions: number;
-  reach: number;
   engagements: number;
   video_views: number;
   new_follows: number;
+  page_views: number;
+  /** Follower total on that day — a series, not a snapshot. */
+  followers: number;
 }
 
 export async function fetchPageDaily(since: string, until: string): Promise<{
@@ -114,12 +115,14 @@ export async function fetchPageDaily(since: string, until: string): Promise<{
   const token = await pageToken();
   const warnings: string[] = [];
 
+  // Only names Meta still honours. Reach and impressions were retired and
+  // have no replacement, so they are simply not reported any more.
   const wanted: [keyof Omit<PageDay, 'date'>, string][] = [
-    ['impressions', 'page_impressions'],
-    ['reach', 'page_impressions_unique'],
     ['engagements', 'page_post_engagements'],
     ['video_views', 'page_video_views'],
     ['new_follows', 'page_daily_follows'],
+    ['page_views', 'page_views_total'],
+    ['followers', 'page_follows'],
   ];
 
   const series: Partial<Record<keyof PageDay, Record<string, number>>> = {};
@@ -137,11 +140,11 @@ export async function fetchPageDaily(since: string, until: string): Promise<{
 
   const days: PageDay[] = [...dates].sort().map((date) => ({
     date,
-    impressions: series.impressions?.[date] ?? 0,
-    reach: series.reach?.[date] ?? 0,
     engagements: series.engagements?.[date] ?? 0,
     video_views: series.video_views?.[date] ?? 0,
     new_follows: series.new_follows?.[date] ?? 0,
+    page_views: series.page_views?.[date] ?? 0,
+    followers: series.followers?.[date] ?? 0,
   }));
 
   let followers: number | null = null;
@@ -166,13 +169,13 @@ export interface PostRow {
   message: string | null;
   permalink: string | null;
   media_type: string | null;
-  impressions: number;
-  reach: number;
   reactions: number;
   comments: number;
   shares: number;
   video_views: number;
   clicks: number;
+  avg_watch_ms: number;
+  view_time_ms: number;
 }
 
 /** Recent posts with their engagement. Counts come from the post edge itself;
@@ -207,27 +210,27 @@ export async function fetchPosts(limit = 25): Promise<PostRow[]> {
       message: p.message ?? null,
       permalink: p.permalink_url ?? null,
       media_type: p.status_type ?? null,
-      impressions: 0,
-      reach: 0,
       reactions: p.reactions?.summary?.total_count ?? 0,
       comments: p.comments?.summary?.total_count ?? 0,
       shares: p.shares?.count ?? 0,
       video_views: 0,
       clicks: 0,
+      avg_watch_ms: 0,
+      view_time_ms: 0,
     };
     try {
       const ip = new URLSearchParams({
-        metric: 'post_impressions,post_impressions_unique,post_clicks,post_video_views',
+        metric: 'post_clicks,post_video_views,post_video_avg_time_watched,post_video_view_time',
         access_token: token,
       });
       const r = await fetch(`${graph(`${p.id}/insights`)}?${ip}`);
       const j = await r.json() as { data?: { name: string; values: { value: number }[] }[] };
       for (const m of j.data ?? []) {
         const v = Number(m.values?.[0]?.value ?? 0);
-        if (m.name === 'post_impressions') row.impressions = v;
-        if (m.name === 'post_impressions_unique') row.reach = v;
         if (m.name === 'post_clicks') row.clicks = v;
         if (m.name === 'post_video_views') row.video_views = v;
+        if (m.name === 'post_video_avg_time_watched') row.avg_watch_ms = v;
+        if (m.name === 'post_video_view_time') row.view_time_ms = v;
       }
     } catch {
       // A post with no insights (too new, or a type Meta does not measure)

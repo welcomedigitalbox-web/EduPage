@@ -57,12 +57,12 @@ export async function GET(req: NextRequest) {
   const today = fmt(new Date());
   const rows = daily.days.map((d) => ({
     date: d.date,
-    impressions: d.impressions,
-    reach: d.reach,
     engagements: d.engagements,
     video_views: d.video_views,
     new_follows: d.new_follows,
-    followers_total: d.date === today ? daily.followers : null,
+    page_views: d.page_views,
+    // page_follows gives a real daily series; fall back to today's snapshot.
+    followers_total: d.followers || (d.date === today ? daily.followers : null),
     fans_total: d.date === today ? daily.fans : null,
     updated_at: new Date().toISOString(),
   }));

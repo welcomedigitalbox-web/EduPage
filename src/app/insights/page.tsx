@@ -5,14 +5,13 @@ import { Stat, BarChart, num } from '@/components/ui';
 export const dynamic = 'force-dynamic';
 
 interface DayRow {
-  date: string; impressions: number; reach: number; engagements: number;
-  video_views: number; new_follows: number;
-  followers_total: number | null; fans_total: number | null;
+  date: string; engagements: number; video_views: number; new_follows: number;
+  page_views: number; followers_total: number | null; fans_total: number | null;
 }
 interface PostRow {
   post_id: string; created_time: string; message: string | null; permalink: string | null;
-  media_type: string | null; impressions: number; reach: number; reactions: number;
-  comments: number; shares: number; video_views: number; clicks: number;
+  media_type: string | null; reactions: number; comments: number; shares: number;
+  video_views: number; clicks: number; avg_watch_ms: number;
 }
 
 export default async function Insights({
@@ -44,6 +43,8 @@ export default async function Insights({
     { reactions: 0, comments: 0, shares: 0, views: 0 }
   );
 
+  const secs = (ms: number) => (ms > 0 ? `${(ms / 1000).toFixed(1)}s` : '—');
+
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString(lang === 'en' ? 'en-GB' : 'my-MM',
       { month: 'short', day: 'numeric' });
@@ -72,8 +73,8 @@ export default async function Insights({
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label={t('pi_followers')} value={followers != null ? num(followers) : '—'}
               sub={t('pi_new_follows', { n: num(sum('new_follows')) })} />
-        <Stat label={t('pi_reach')} value={num(sum('reach'))} sub={t('pi_reach_sub')} />
-        <Stat label={t('pi_impressions')} value={num(sum('impressions'))} sub={t('pi_impressions_sub')} />
+        <Stat label={t('pi_page_views')} value={num(sum('page_views'))} sub={t('pi_page_views_sub')} />
+        <Stat label={t('pi_engagements')} value={num(sum('engagements'))} sub={t('pi_engagements_sub')} />
         <Stat label={t('pi_video_views')} value={num(sum('video_views'))} />
       </section>
 
@@ -87,8 +88,8 @@ export default async function Insights({
       {rows.length > 0 && (
         <section className="grid gap-4 lg:grid-cols-2">
           <div className="card p-4">
-            <div className="label mb-3">{t('pi_chart_reach')}</div>
-            <BarChart data={rows.map((r) => ({ label: r.date.slice(5), value: Number(r.reach) }))}
+            <div className="label mb-3">{t('pi_chart_engagements')}</div>
+            <BarChart data={rows.map((r) => ({ label: r.date.slice(5), value: Number(r.engagements) }))}
                       color="var(--series-1)" />
           </div>
           <div className="card p-4">
@@ -106,19 +107,18 @@ export default async function Insights({
             <tr className="border-b border-edge">
               <th className="p-3 text-left font-normal">{t('pi_post')}</th>
               <th className="p-3 text-left font-normal">{t('pi_date')}</th>
-              <th className="p-3 text-right font-normal">{t('pi_reach')}</th>
-              <th className="p-3 text-right font-normal">{t('pi_impressions')}</th>
               <th className="p-3 text-right font-normal">{t('pi_reactions')}</th>
               <th className="p-3 text-right font-normal">{t('pi_comments')}</th>
               <th className="p-3 text-right font-normal">{t('pi_shares')}</th>
+              <th className="p-3 text-right font-normal">{t('pi_clicks')}</th>
               <th className="p-3 text-right font-normal">{t('pi_views')}</th>
-              <th className="p-3 text-right font-normal">{t('pi_eng_rate')}</th>
+              <th className="p-3 text-right font-normal">{t('pi_avg_watch')}</th>
+              <th className="p-3 text-right font-normal">{t('pi_engagements')}</th>
             </tr>
           </thead>
           <tbody className="tabular-nums">
             {posts.map((p) => {
               const eng = Number(p.reactions) + Number(p.comments) + Number(p.shares);
-              const rate = Number(p.reach) > 0 ? (eng / Number(p.reach)) * 100 : null;
               return (
                 <tr key={p.post_id} className="border-b border-edge/50 last:border-0">
                   <td className="max-w-[22rem] p-3">
@@ -137,13 +137,13 @@ export default async function Insights({
                     )}
                   </td>
                   <td className="p-3 text-xs text-muted">{fmtDate(p.created_time)}</td>
-                  <td className="p-3 text-right">{num(Number(p.reach))}</td>
-                  <td className="p-3 text-right text-muted">{num(Number(p.impressions))}</td>
                   <td className="p-3 text-right">{num(Number(p.reactions))}</td>
                   <td className="p-3 text-right">{num(Number(p.comments))}</td>
                   <td className="p-3 text-right">{num(Number(p.shares))}</td>
+                  <td className="p-3 text-right text-muted">{num(Number(p.clicks))}</td>
                   <td className="p-3 text-right text-muted">{num(Number(p.video_views))}</td>
-                  <td className="p-3 text-right">{rate != null ? `${rate.toFixed(1)}%` : '—'}</td>
+                  <td className="p-3 text-right text-muted">{secs(Number(p.avg_watch_ms))}</td>
+                  <td className="p-3 text-right font-medium">{num(eng)}</td>
                 </tr>
               );
             })}
