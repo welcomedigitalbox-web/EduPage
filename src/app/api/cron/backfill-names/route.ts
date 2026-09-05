@@ -1,0 +1,49 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { admin } from '@/lib/supabase';
+import { env } from '@/lib/env';
+import { fetchProfile } from '@/lib/meta';
+
+export const runtime = 'nodejs';
+export const maxDuration = 300;
+
+function authorised(req: NextRequest) {
+  const secret = env.cronSecret();
+  if (!secret) return true;
+  return req.headers.get('authorization') === `Bearer ${secret}`;
+}
+
+/**
+ * Fill in the names that were never fetched while the profile call was broken.
+ * Runs newest-first so the inbox looks right immediately, and can be called
+ * repeatedly — each pass only touches contacts that still have no name.
+ */
+export async function GET(req: NextRequest) {
+  if (!authorised(req)) return new NextResponse('unauthorized', { status: 401 });
+
+  const limit = Number(req.nextUrl.searchParams.get('limit') ?? 100);
+  const db = admin();
+  const { data: contacts } = await db
+    .from('msgr_contacts').select('id,psid')
+    .is('name', null)
+    .order('last_inbound_at', { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  let filled = 0;
+  const errors: string[] = [];
+  for (const c of contacts ?? []) {
+    const p = await fetchProfile(c.psid);
+    if (!p?.name) { errors.push(c.psid); continue; }
+    await db.from('msgr_contacts')
+      .update({ name: p.name, profile_pic: p.profile_pic }).eq('id', c.id);
+    filled += 1;
+  }
+
+  return NextResponse.json({
+    ok: true,
+    checked: contacts?.length ?? 0,
+    filled,
+    failed: errors.length,
+    // A couple of examples is enough to diagnose; the rest is noise.
+    failed_sample: errors.slice(0, 3),
+  });
+}

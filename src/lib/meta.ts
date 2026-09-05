@@ -42,21 +42,29 @@ export async function senderAction(psid: string, action: 'typing_on' | 'typing_o
   }).catch(() => {});
 }
 
+/**
+ * Name and photo for a PSID. Ask for nothing but the three fields Meta still
+ * serves: `locale` was retired, and requesting one dead field makes the whole
+ * call fail — which is why every contact was left showing its PSID.
+ */
 export async function fetchProfile(psid: string) {
   try {
     const res = await fetch(
-      `${graph(psid)}?fields=first_name,last_name,profile_pic,locale&access_token=${env.fbPageToken()}`
+      `${graph(psid)}?fields=first_name,last_name,profile_pic&access_token=${env.fbPageToken()}`
     );
-    if (!res.ok) return null;
     const j = (await res.json()) as {
-      first_name?: string; last_name?: string; profile_pic?: string; locale?: string;
+      first_name?: string; last_name?: string; profile_pic?: string;
+      error?: { message?: string; code?: number };
     };
-    return {
-      name: [j.first_name, j.last_name].filter(Boolean).join(' ') || null,
-      profile_pic: j.profile_pic ?? null,
-      locale: j.locale ?? null,
-    };
-  } catch {
+    if (j.error) {
+      console.error('[meta] profile failed', psid, j.error.message);
+      return null;
+    }
+    const name = [j.first_name, j.last_name].filter(Boolean).join(' ') || null;
+    if (!name && !j.profile_pic) return null;
+    return { name, profile_pic: j.profile_pic ?? null };
+  } catch (e) {
+    console.error('[meta] profile threw', psid, e);
     return null;
   }
 }
