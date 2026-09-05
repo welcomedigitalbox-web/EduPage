@@ -1,9 +1,11 @@
 import { adPerformance } from '@/lib/queries';
 import { money, num } from '@/components/ui';
+import { ctx } from '@/lib/server-ctx';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Ads() {
+  const { t } = await ctx();
   const rows = await adPerformance();
   const total = rows.reduce(
     (a, r) => ({
@@ -18,23 +20,21 @@ export default async function Ads() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold">Ads စွမ်းဆောင်ရည်</h1>
-        <p className="text-sm text-muted">
-          ad တစ်ခုချင်းစီ ဘယ်လောက်ကုန်ပြီး၊ စာဘယ်နှစောင်ဝင်ပြီး၊ ဘယ်နှခု အရောင်းဖြစ်လဲ
-        </p>
+        <h1 className="text-xl font-semibold">{t('ad_title')}</h1>
+        <p className="text-sm text-muted">{t('ad_sub')}</p>
       </div>
 
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[64rem] text-sm">
           <thead className="text-muted">
             <tr className="border-b border-edge">
-              <th className="p-3 text-left font-normal">Ad</th>
-              <th className="p-3 text-right font-normal">ကုန်ကျ</th>
-              <th className="p-3 text-right font-normal">Meta chat</th>
-              <th className="p-3 text-right font-normal">Lead (ကိုယ့်စနစ်)</th>
-              <th className="p-3 text-right font-normal">စိတ်ဝင်စား</th>
-              <th className="p-3 text-right font-normal">အရောင်း</th>
-              <th className="p-3 text-right font-normal">ဝင်ငွေ</th>
+              <th className="p-3 text-left font-normal">{t('ad_ad')}</th>
+              <th className="p-3 text-right font-normal">{t('ad_spend')}</th>
+              <th className="p-3 text-right font-normal">{t('ad_meta_chat')}</th>
+              <th className="p-3 text-right font-normal">{t('ad_leads')}</th>
+              <th className="p-3 text-right font-normal">{t('ad_qualified')}</th>
+              <th className="p-3 text-right font-normal">{t('ad_orders')}</th>
+              <th className="p-3 text-right font-normal">{t('ad_revenue')}</th>
               <th className="p-3 text-right font-normal">CPL</th>
               <th className="p-3 text-right font-normal">CPA</th>
               <th className="p-3 text-right font-normal">ROAS</th>
@@ -63,15 +63,13 @@ export default async function Ads() {
               );
             })}
             {!rows.length && (
-              <tr><td colSpan={10} className="p-8 text-center text-muted">
-                Ads data မရှိသေးပါ — <code>/api/cron/sync-ads</code> ကို တစ်ခါ run ကြည့်ပါ
-              </td></tr>
+              <tr><td colSpan={10} className="p-8 text-center text-muted">{t('ad_empty')}</td></tr>
             )}
           </tbody>
           {rows.length > 0 && (
             <tfoot className="border-t-2 border-edge text-sm font-medium tabular-nums">
               <tr>
-                <td className="p-3">စုစုပေါင်း</td>
+                <td className="p-3">{t('ad_total')}</td>
                 <td className="p-3 text-right">{money(total.spend)}</td>
                 <td className="p-3" />
                 <td className="p-3 text-right">{num(total.leads)}</td>
@@ -87,11 +85,7 @@ export default async function Ads() {
         </table>
       </div>
 
-      <p className="text-xs text-muted">
-        &ldquo;Meta chat&rdquo; က Meta ရေတွက်တဲ့ messaging conversations started။
-        &ldquo;Lead&rdquo; က ကိုယ့်စနစ်ထဲ တကယ်ရောက်လာတဲ့လူ။ နှစ်ခုကွာနေရင် webhook ကျန်နေတာ ဒါမှမဟုတ်
-        attribution window မတူတာ ဖြစ်နိုင်ပါတယ်။
-      </p>
+      <p className="text-xs text-muted">{t('ad_footnote')}</p>
     </div>
   );
 }

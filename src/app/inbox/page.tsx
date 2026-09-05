@@ -1,32 +1,38 @@
 import Link from 'next/link';
 import { conversationList } from '@/lib/queries';
 import { StageBadge, HandlerBadge, ago } from '@/components/ui';
+import { ctx } from '@/lib/server-ctx';
+import { STAGE_KEY } from '@/lib/i18n';
 import type { LeadStage } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
 const TABS = [
-  { key: 'needs_human', label: 'လူ လိုက်စစ်ရမယ်' },
-  { key: 'bot', label: 'Bot ပြန်ဖြေထား' },
-  { key: 'human', label: 'လူ ကိုင်နေ' },
-  { key: 'no_reply', label: 'ဘယ်သူမှ မပြန်ရသေး' },
-  { key: 'all', label: 'အားလုံး' },
+  { key: 'needs_human', label: 'ib_needs_human' },
+  { key: 'bot', label: 'ib_bot' },
+  { key: 'human', label: 'ib_human' },
+  { key: 'no_reply', label: 'ib_no_reply' },
+  { key: 'all', label: 'ib_all' },
 ];
 
 export default async function Inbox({
   searchParams,
 }: { searchParams: Promise<{ filter?: string }> }) {
+  const { t } = await ctx();
   const sp = await searchParams;
   const filter = sp.filter ?? 'needs_human';
   const rows = await conversationList(filter);
+  const handler = { bot: t('ib_by_bot'), human: t('ib_by_human'), none: t('ib_by_none') };
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Inbox</h1>
+      <h1 className="text-xl font-semibold">{t('ib_title')}</h1>
       <div className="flex flex-wrap gap-2">
-        {TABS.map((t) => (
-          <Link key={t.key} href={`/inbox?filter=${t.key}`}
-            className={`btn ${t.key === filter ? 'border-brand text-brand' : ''}`}>{t.label}</Link>
+        {TABS.map((tab) => (
+          <Link key={tab.key} href={`/inbox?filter=${tab.key}`}
+            className={`btn ${tab.key === filter ? 'border-brand text-brand' : ''}`}>
+            {t(tab.label)}
+          </Link>
         ))}
       </div>
 
@@ -34,12 +40,12 @@ export default async function Inbox({
         <table className="w-full text-sm">
           <thead className="text-muted">
             <tr className="border-b border-edge">
-              <th className="p-3 text-left font-normal">ဖောက်သည်</th>
-              <th className="p-3 text-left font-normal">Stage</th>
-              <th className="p-3 text-left font-normal">နောက်ဆုံးပြန်ဖြေသူ</th>
-              <th className="p-3 text-left font-normal">အကြောင်းအရင်း</th>
-              <th className="p-3 text-right font-normal">စာ</th>
-              <th className="p-3 text-right font-normal">နောက်ဆုံး</th>
+              <th className="p-3 text-left font-normal">{t('ib_customer')}</th>
+              <th className="p-3 text-left font-normal">{t('ib_stage')}</th>
+              <th className="p-3 text-left font-normal">{t('ib_last_by')}</th>
+              <th className="p-3 text-left font-normal">{t('ib_reason')}</th>
+              <th className="p-3 text-right font-normal">{t('ib_msgs')}</th>
+              <th className="p-3 text-right font-normal">{t('ib_last')}</th>
             </tr>
           </thead>
           <tbody>
@@ -58,20 +64,20 @@ export default async function Inbox({
                       {c?.phone ?? '—'}{c?.source_ad_id ? ' · ad' : ' · organic'}
                     </div>
                   </td>
-                  <td className="p-3">{c && <StageBadge stage={c.stage} />}</td>
-                  <td className="p-3"><HandlerBadge by={r.last_reply_by} /></td>
+                  <td className="p-3">{c && <StageBadge stage={c.stage} label={t(STAGE_KEY[c.stage] ?? c.stage)} />}</td>
+                  <td className="p-3"><HandlerBadge by={r.last_reply_by} labels={handler} /></td>
                   <td className="p-3 max-w-[22rem] truncate text-xs text-muted">
                     {r.needs_human_reason ?? '—'}
                   </td>
                   <td className="p-3 text-right tabular-nums text-xs">
                     {r.inbound_count}↓ {r.outbound_count}↑
                   </td>
-                  <td className="p-3 text-right text-xs text-muted">{ago(r.last_message_at)}</td>
+                  <td className="p-3 text-right text-xs text-muted">{ago(r.last_message_at, t)}</td>
                 </tr>
               );
             })}
             {!rows.length && (
-              <tr><td colSpan={6} className="p-8 text-center text-muted">ဒီစာရင်းမှာ ဘာမှမရှိပါ</td></tr>
+              <tr><td colSpan={6} className="p-8 text-center text-muted">{t('ib_empty')}</td></tr>
             )}
           </tbody>
         </table>

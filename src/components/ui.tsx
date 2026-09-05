@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { STAGE_LABEL, type LeadStage } from '@/lib/types';
+import type { LeadStage } from '@/lib/types';
 
 export function Stat({
   label, value, sub, tone,
@@ -14,7 +14,7 @@ export function Stat({
   );
 }
 
-export function StageBadge({ stage }: { stage: LeadStage }) {
+export function StageBadge({ stage, label }: { stage: LeadStage; label: string }) {
   const tone: Record<string, string> = {
     new: 'border-edge text-muted',
     engaged: 'border-[#3987e5] text-[#3987e5]',
@@ -27,15 +27,18 @@ export function StageBadge({ stage }: { stage: LeadStage }) {
   };
   return (
     <span className={`rounded border px-1.5 py-0.5 text-[11px] ${tone[stage] ?? 'border-edge text-muted'}`}>
-      {STAGE_LABEL[stage] ?? stage}
+      {label}
     </span>
   );
 }
 
-export function HandlerBadge({ by }: { by: string | null }) {
-  if (by === 'bot') return <span className="rounded bg-[#3987e5]/15 px-1.5 py-0.5 text-[11px] text-[#3987e5]">🤖 Bot</span>;
-  if (by === 'human') return <span className="rounded bg-good/15 px-1.5 py-0.5 text-[11px] text-good">👤 လူ</span>;
-  return <span className="rounded bg-edge px-1.5 py-0.5 text-[11px] text-muted">— မပြန်ရသေး</span>;
+export function HandlerBadge({ by, labels }: {
+  by: string | null;
+  labels: { bot: string; human: string; none: string };
+}) {
+  if (by === 'bot') return <span className="rounded bg-[#3987e5]/15 px-1.5 py-0.5 text-[11px] text-[#3987e5]">{labels.bot}</span>;
+  if (by === 'human') return <span className="rounded bg-good/15 px-1.5 py-0.5 text-[11px] text-good">{labels.human}</span>;
+  return <span className="rounded bg-edge px-1.5 py-0.5 text-[11px] text-muted">{labels.none}</span>;
 }
 
 /** Single-series bar chart. One measure only — never two scales on one axis. */
@@ -107,12 +110,13 @@ export function num(n: number | null | undefined, digits = 0) {
   if (n == null) return '—';
   return n.toLocaleString(undefined, { maximumFractionDigits: digits });
 }
-export function ago(iso: string | null) {
+/** Relative time, worded by the caller's language. */
+export function ago(iso: string | null, tr: (k: string, v?: Record<string, string | number>) => string) {
   if (!iso) return '—';
   const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (m < 1) return 'ခုနလေးတင်';
-  if (m < 60) return `${m} မိနစ်`;
+  if (m < 1) return tr('t_just_now');
+  if (m < 60) return tr('t_min', { n: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h} နာရီ`;
-  return `${Math.floor(h / 24)} ရက်`;
+  if (h < 24) return tr('t_hour', { n: h });
+  return tr('t_day', { n: Math.floor(h / 24) });
 }

@@ -1,6 +1,8 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ctx } from '@/lib/server-ctx';
+import { LangToggle, SignOut } from '@/components/TopBar';
 
 export const metadata: Metadata = {
   title: 'Messenger AI CRM',
@@ -8,31 +10,43 @@ export const metadata: Metadata = {
 };
 
 const NAV = [
-  { href: '/', label: 'ခြုံငုံ' },
-  { href: '/inbox', label: 'Inbox' },
-  { href: '/followups', label: 'Follow-up' },
-  { href: '/ads', label: 'Ads' },
-  { href: '/settings', label: 'Settings' },
+  { href: '/', key: 'nav_overview' },
+  { href: '/inbox', key: 'nav_inbox' },
+  { href: '/customers', key: 'nav_customers' },
+  { href: '/followups', key: 'nav_followups' },
+  { href: '/ads', key: 'nav_ads' },
+  { href: '/settings', key: 'nav_settings' },
 ];
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const { lang, session, t } = await ctx();
+
   return (
-    <html lang="my">
+    <html lang={lang === 'en' ? 'en' : 'my'}>
       <body>
-        <div className="flex min-h-screen">
-          <aside className="w-52 shrink-0 border-r border-edge bg-panel p-4">
-            <div className="mb-6 text-sm font-semibold">Messenger AI CRM</div>
-            <nav className="space-y-1">
-              {NAV.map((n) => (
-                <Link key={n.href} href={n.href}
-                  className="block rounded-lg px-3 py-2 text-sm text-muted hover:bg-edge hover:text-white">
-                  {n.label}
-                </Link>
-              ))}
-            </nav>
-          </aside>
-          <main className="flex-1 overflow-x-hidden p-6">{children}</main>
-        </div>
+        {session ? (
+          <div className="flex min-h-screen">
+            <aside className="flex w-56 shrink-0 flex-col border-r border-edge bg-panel p-4">
+              <div className="mb-4 text-sm font-semibold">{t('app_name')}</div>
+              <div className="mb-4"><LangToggle lang={lang} /></div>
+              <nav className="flex-1 space-y-1">
+                {NAV.map((n) => (
+                  <Link key={n.href} href={n.href}
+                    className="block rounded-lg px-3 py-2 text-sm text-muted hover:bg-edge hover:text-white">
+                    {t(n.key)}
+                  </Link>
+                ))}
+              </nav>
+              <div className="border-t border-edge pt-2">
+                <div className="truncate px-3 py-1 text-xs text-muted">{session.email}</div>
+                <SignOut label={t('sign_out')} />
+              </div>
+            </aside>
+            <main className="flex-1 overflow-x-hidden p-6">{children}</main>
+          </div>
+        ) : (
+          <main>{children}</main>
+        )}
       </body>
     </html>
   );

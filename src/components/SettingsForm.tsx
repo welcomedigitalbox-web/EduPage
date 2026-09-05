@@ -3,9 +3,23 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { BotSettings } from '@/lib/types';
 
+const INPUT =
+  'w-full rounded-lg border border-edge bg-ink p-2 text-sm outline-none focus:border-brand';
+
+export interface SettingsLabels {
+  enabled: string; business: string; store: string; storeHint: string; pick: string;
+  quoteStock: string; language: string; langMy: string; langEn: string; langMixed: string;
+  persona: string; handoff: string; minConf: string; maxTurns: string;
+  followupHours: string; ghostHours: string; save: string; saved: string;
+}
+
 export function SettingsForm({
-  initial, stores,
-}: { initial: BotSettings; stores: { id: string; name: string }[] }) {
+  initial, stores, labels,
+}: {
+  initial: BotSettings;
+  stores: { id: string; name: string }[];
+  labels: SettingsLabels;
+}) {
   const [s, setS] = useState(initial);
   const [saved, setSaved] = useState(false);
   const router = useRouter();
@@ -17,62 +31,60 @@ export function SettingsForm({
   return (
     <div className="card space-y-4 p-4">
       <label className="flex items-center justify-between">
-        <span className="text-sm">Bot အလုပ်လုပ်နေမလား</span>
+        <span className="text-sm">{labels.enabled}</span>
         <input type="checkbox" checked={s.is_enabled} onChange={(e) => set('is_enabled', e.target.checked)} />
       </label>
 
-      <Field label="ဆိုင်နာမည်">
-        <input className="inp" value={s.business_name} onChange={(e) => set('business_name', e.target.value)} />
+      <Field label={labels.business}>
+        <input className={INPUT} value={s.business_name} onChange={(e) => set('business_name', e.target.value)} />
       </Field>
 
-      <Field label="Bot က ဘယ် POS store ရဲ့ ဈေး/stock ကို ပြောမလဲ">
-        <select className="inp" value={s.default_store_id ?? ''}
+      <Field label={labels.store}>
+        <select className={INPUT} value={s.default_store_id ?? ''}
           onChange={(e) => set('default_store_id', e.target.value || null)}>
-          <option value="">— ရွေးပါ —</option>
+          <option value="">{labels.pick}</option>
           {stores.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
         </select>
-        <p className="mt-1 text-[11px] text-muted">
-          ဒါ မရွေးရင် bot က ပစ္စည်းအကြောင်း ဘာမှ မပြောနိုင်ဘဲ လူ့ဆီပဲ လွှဲပါလိမ့်မယ်။
-        </p>
+        <p className="mt-1 text-[11px] text-muted">{labels.storeHint}</p>
       </Field>
 
       <label className="flex items-center justify-between">
-        <span className="text-sm">Stock အရေအတွက် အတိအကျ ပြောခွင့်ပြုမလား</span>
+        <span className="text-sm">{labels.quoteStock}</span>
         <input type="checkbox" checked={s.quote_stock} onChange={(e) => set('quote_stock', e.target.checked)} />
       </label>
 
-      <Field label="ဘာသာစကား">
-        <select className="inp" value={s.language} onChange={(e) => set('language', e.target.value)}>
-          <option value="my">မြန်မာ</option>
-          <option value="en">English</option>
-          <option value="mixed">ဖောက်သည်သုံးတဲ့ ဘာသာအတိုင်း</option>
+      <Field label={labels.language}>
+        <select className={INPUT} value={s.language} onChange={(e) => set('language', e.target.value)}>
+          <option value="my">{labels.langMy}</option>
+          <option value="en">{labels.langEn}</option>
+          <option value="mixed">{labels.langMixed}</option>
         </select>
       </Field>
 
-      <Field label="Bot ရဲ့ စကားပြောပုံ (persona)">
-        <textarea className="inp" rows={2} value={s.persona} onChange={(e) => set('persona', e.target.value)} />
+      <Field label={labels.persona}>
+        <textarea className={INPUT} rows={2} value={s.persona} onChange={(e) => set('persona', e.target.value)} />
       </Field>
 
-      <Field label="လူ့ဆီ ချက်ချင်းလွှဲရမယ့် စကားလုံးများ (comma ခြား)">
-        <input className="inp" value={s.handoff_keywords.join(', ')}
+      <Field label={labels.handoff}>
+        <input className={INPUT} value={s.handoff_keywords.join(', ')}
           onChange={(e) => set('handoff_keywords', e.target.value.split(',').map((x) => x.trim()).filter(Boolean))} />
       </Field>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label={`Bot အနည်းဆုံး ယုံကြည်မှု (${s.min_confidence})`}>
+        <Field label={labels.minConf.replace('{n}', String(s.min_confidence))}>
           <input type="range" min={0} max={1} step={0.05} value={s.min_confidence}
             onChange={(e) => set('min_confidence', Number(e.target.value))} className="w-full" />
         </Field>
-        <Field label="Bot အများဆုံး ဖြေခွင့် (အကြိမ်)">
-          <input type="number" className="inp" value={s.max_bot_turns}
+        <Field label={labels.maxTurns}>
+          <input type="number" className={INPUT} value={s.max_bot_turns}
             onChange={(e) => set('max_bot_turns', Number(e.target.value))} />
         </Field>
-        <Field label="Follow-up စတင်ချိန် (နာရီ)">
-          <input type="number" className="inp" value={s.follow_up_hours}
+        <Field label={labels.followupHours}>
+          <input type="number" className={INPUT} value={s.follow_up_hours}
             onChange={(e) => set('follow_up_hours', Number(e.target.value))} />
         </Field>
-        <Field label="ပျောက်သွားပြီလို့ သတ်မှတ်ချိန် (နာရီ)">
-          <input type="number" className="inp" value={s.ghost_hours}
+        <Field label={labels.ghostHours}>
+          <input type="number" className={INPUT} value={s.ghost_hours}
             onChange={(e) => set('ghost_hours', Number(e.target.value))} />
         </Field>
       </div>
@@ -83,11 +95,9 @@ export function SettingsForm({
             method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(s),
           });
           setSaved(true); router.refresh();
-        }}>သိမ်းမယ်</button>
-        {saved && <span className="text-sm text-good">သိမ်းပြီးပါပြီ</span>}
+        }}>{labels.save}</button>
+        {saved && <span className="text-sm text-good">{labels.saved}</span>}
       </div>
-
-      <style>{`.inp{width:100%;border-radius:.5rem;border:1px solid #262b35;background:#0f1115;padding:.5rem;font-size:.875rem;outline:none}`}</style>
     </div>
   );
 }
@@ -101,15 +111,22 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function KbEditor({ items }: { items: { id: string; kind: string; title: string; body: string }[] }) {
+export function KbEditor({
+  items, labels,
+}: {
+  items: { id: string; kind: string; title: string; body: string }[];
+  labels: {
+    add: string; policy: string; faq: string; titlePh: string; bodyPh: string;
+    addBtn: string; del: string; empty: string;
+  };
+}) {
   const router = useRouter();
   const [draft, setDraft] = useState({ kind: 'policy', title: '', body: '' });
 
   async function save() {
     if (!draft.title || !draft.body) return;
     await fetch('/api/kb', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(draft),
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(draft),
     });
     setDraft({ kind: 'policy', title: '', body: '' });
     router.refresh();
@@ -118,18 +135,19 @@ export function KbEditor({ items }: { items: { id: string; kind: string; title: 
   return (
     <div className="space-y-3">
       <div className="card space-y-2 p-4">
-        <div className="label">အသစ်ထည့်မယ်</div>
+        <div className="label">{labels.add}</div>
         <div className="flex gap-2">
-          <select className="inp2" value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value })}>
-            <option value="policy">စည်းကမ်း</option>
-            <option value="faq">FAQ</option>
+          <select className={INPUT + ' w-32'} value={draft.kind}
+            onChange={(e) => setDraft({ ...draft, kind: e.target.value })}>
+            <option value="policy">{labels.policy}</option>
+            <option value="faq">{labels.faq}</option>
           </select>
-          <input className="inp2 flex-1" placeholder="ခေါင်းစဉ် (ဥပမာ — ပို့ခ)" value={draft.title}
+          <input className={INPUT} placeholder={labels.titlePh} value={draft.title}
             onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
         </div>
-        <textarea className="inp2 w-full" rows={3} placeholder="အကြောင်းအရာ — ပစ္စည်းဈေး/stock က POS ကနေ တိုက်ရိုက်ယူတာမို့ ဒီမှာ မထည့်ရပါ"
+        <textarea className={INPUT} rows={3} placeholder={labels.bodyPh}
           value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} />
-        <button className="btn-primary" onClick={save}>ထည့်မယ်</button>
+        <button className="btn-primary" onClick={save}>{labels.addBtn}</button>
       </div>
 
       <div className="card divide-y divide-edge">
@@ -148,15 +166,11 @@ export function KbEditor({ items }: { items: { id: string; kind: string; title: 
                 body: JSON.stringify({ delete_id: k.id }),
               });
               router.refresh();
-            }}>ဖျက်</button>
+            }}>{labels.del}</button>
           </div>
         ))}
-        {!items.length && <div className="p-6 text-center text-sm text-muted">
-          Knowledge base ဗလာဖြစ်နေရင် bot က ဘာမှ မဖြေဘဲ လူ့ဆီပဲ လွှဲပါလိမ့်မယ်
-        </div>}
+        {!items.length && <div className="p-6 text-center text-sm text-muted">{labels.empty}</div>}
       </div>
-
-      <style>{`.inp2{border-radius:.5rem;border:1px solid #262b35;background:#0f1115;padding:.5rem;font-size:.875rem;outline:none}`}</style>
     </div>
   );
 }

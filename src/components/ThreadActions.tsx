@@ -1,9 +1,14 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { STAGE_LABEL, type LeadStage } from '@/lib/types';
+import type { LeadStage } from '@/lib/types';
 
-export function ReplyBox({ conversationId }: { conversationId: string }) {
+export function ReplyBox({
+  conversationId, labels,
+}: {
+  conversationId: string;
+  labels: { placeholder: string; send: string; hint: string; failed: string };
+}) {
   const [text, setText] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -16,7 +21,7 @@ export function ReplyBox({ conversationId }: { conversationId: string }) {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text }),
     });
-    if (!res.ok) { setErr((await res.json()).error ?? 'ပို့မရပါ'); return; }
+    if (!res.ok) { setErr(labels.failed); return; }
     setText('');
     start(() => router.refresh());
   }
@@ -25,19 +30,21 @@ export function ReplyBox({ conversationId }: { conversationId: string }) {
     <div className="border-t border-edge p-3">
       <textarea
         value={text} onChange={(e) => setText(e.target.value)} rows={2}
-        placeholder="လူကိုယ်တိုင် ပြန်ဖြေရန်… (ဒီကနေပို့လိုက်ရင် bot ရပ်သွားပါမယ်)"
+        placeholder={labels.placeholder}
         className="w-full resize-none rounded-lg border border-edge bg-ink p-2 text-sm outline-none focus:border-brand"
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }}
       />
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-xs text-muted">{err ?? '⌘/Ctrl + Enter နဲ့ ပို့နိုင်'}</span>
-        <button className="btn-primary" onClick={send} disabled={pending || !text.trim()}>ပို့မယ်</button>
+        <span className="text-xs text-muted">{err ?? labels.hint}</span>
+        <button className="btn-primary" onClick={send} disabled={pending || !text.trim()}>{labels.send}</button>
       </div>
     </div>
   );
 }
 
-export function StagePicker({ contactId, stage }: { contactId: string; stage: LeadStage }) {
+export function StagePicker({
+  contactId, stage, options,
+}: { contactId: string; stage: LeadStage; options: { value: string; label: string }[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   return (
@@ -52,12 +59,14 @@ export function StagePicker({ contactId, stage }: { contactId: string; stage: Le
         setBusy(false); router.refresh();
       }}
       className="rounded-lg border border-edge bg-panel px-2 py-1 text-xs">
-      {Object.entries(STAGE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   );
 }
 
-export function StatusButtons({ conversationId }: { conversationId: string }) {
+export function StatusButtons({
+  conversationId, labels,
+}: { conversationId: string; labels: { bot: string; mine: string; close: string } }) {
   const router = useRouter();
   async function set(status: string) {
     await fetch(`/api/conversations/${conversationId}/status`, {
@@ -68,9 +77,9 @@ export function StatusButtons({ conversationId }: { conversationId: string }) {
   }
   return (
     <div className="flex gap-2">
-      <button className="btn" onClick={() => set('bot_handling')}>Bot ပြန်ပေးမယ်</button>
-      <button className="btn" onClick={() => set('human_handling')}>ငါကိုင်မယ်</button>
-      <button className="btn" onClick={() => set('closed')}>ပိတ်မယ်</button>
+      <button className="btn" onClick={() => set('bot_handling')}>{labels.bot}</button>
+      <button className="btn" onClick={() => set('human_handling')}>{labels.mine}</button>
+      <button className="btn" onClick={() => set('closed')}>{labels.close}</button>
     </div>
   );
 }
@@ -84,11 +93,16 @@ interface DraftLine {
   qty: number; unit_price: number;
 }
 
-/** Writes a real POS order. The basket the AI drafted is pre-filled, but a
- *  person always edits and confirms it before it becomes a sale. */
 export function OrderButton({
-  contactId, draft,
-}: { contactId: string; draft?: DraftLine[] }) {
+  contactId, draft, labels,
+}: {
+  contactId: string;
+  draft?: DraftLine[];
+  labels: {
+    open: string; prefilled: string; title: string; search: string; out: string;
+    left: string; total: string; save: string; cancel: string; failed: string; note: string;
+  };
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [products, setProducts] = useState<PosProduct[]>([]);
@@ -128,17 +142,17 @@ export function OrderButton({
   if (!open) {
     return (
       <button className="btn-primary w-full" onClick={openPanel}>
-        POS order ဖွင့်မယ်{draft?.length ? ` (${draft.length} မျိုး ကြိုဖြည့်ထား)` : ''}
+        {labels.open}{draft?.length ? labels.prefilled : ''}
       </button>
     );
   }
 
   return (
     <div className="card space-y-2 p-3">
-      <div className="label">POS order အသစ်</div>
+      <div className="label">{labels.title}</div>
 
       <input value={search} onChange={(e) => setSearch(e.target.value)}
-        placeholder="ပစ္စည်းရှာမယ်…"
+        placeholder={labels.search}
         className="w-full rounded-lg border border-edge bg-ink p-2 text-sm outline-none focus:border-brand" />
       {matches.length > 0 && (
         <div className="max-h-40 overflow-y-auto rounded-lg border border-edge">
@@ -147,7 +161,7 @@ export function OrderButton({
               className="flex w-full items-center justify-between px-2 py-1.5 text-left text-xs hover:bg-edge">
               <span>{p.display_name}</span>
               <span className={p.stock_qty <= 0 ? 'text-bad' : 'text-muted'}>
-                {p.price.toLocaleString()} · {p.stock_qty <= 0 ? 'ကုန်' : `${p.stock_qty} ခု`}
+                {p.price.toLocaleString()} · {p.stock_qty <= 0 ? labels.out : `${p.stock_qty} ${labels.left}`}
               </span>
             </button>
           ))}
@@ -167,7 +181,7 @@ export function OrderButton({
       ))}
 
       <div className="flex justify-between border-t border-edge pt-2 text-sm">
-        <span className="text-muted">စုစုပေါင်း</span>
+        <span className="text-muted">{labels.total}</span>
         <span className="tabular-nums">{total.toLocaleString()} MMK</span>
       </div>
       {err && <p className="text-xs text-bad">{err}</p>}
@@ -180,20 +194,19 @@ export function OrderButton({
             body: JSON.stringify({ contact_id: contactId, lines }),
           });
           setBusy(false);
-          if (!res.ok) { setErr((await res.json()).error ?? 'သိမ်းမရပါ'); return; }
+          if (!res.ok) { setErr(labels.failed); return; }
           setOpen(false); router.refresh();
-        }}>POS ထဲ သိမ်းမယ်</button>
-        <button className="btn" onClick={() => setOpen(false)}>မလုပ်တော့</button>
+        }}>{labels.save}</button>
+        <button className="btn" onClick={() => setOpen(false)}>{labels.cancel}</button>
       </div>
-      <p className="text-[11px] text-muted">
-        POS ရဲ့ Sale Order စာမျက်နှာမှာ &ldquo;pending&rdquo; အဖြစ် ဝင်သွားပါမယ်။ Stock က
-        တကယ်ထုတ်ပေးမှသာ လျော့ပါမယ်။
-      </p>
+      <p className="text-[11px] text-muted">{labels.note}</p>
     </div>
   );
 }
 
-export function FollowUpActions({ id }: { id: string }) {
+export function FollowUpActions({
+  id, labels,
+}: { id: string; labels: { done: string; snooze: string; cancel: string } }) {
   const router = useRouter();
   async function act(action: string, hours?: number) {
     await fetch(`/api/followups/${id}`, {
@@ -204,9 +217,9 @@ export function FollowUpActions({ id }: { id: string }) {
   }
   return (
     <div className="flex gap-1">
-      <button className="btn text-xs" onClick={() => act('done')}>ပြီးပြီ</button>
-      <button className="btn text-xs" onClick={() => act('snooze', 24)}>မနက်ဖြန်</button>
-      <button className="btn text-xs" onClick={() => act('cancel')}>ဖျက်</button>
+      <button className="btn text-xs" onClick={() => act('done')}>{labels.done}</button>
+      <button className="btn text-xs" onClick={() => act('snooze', 24)}>{labels.snooze}</button>
+      <button className="btn text-xs" onClick={() => act('cancel')}>{labels.cancel}</button>
     </div>
   );
 }

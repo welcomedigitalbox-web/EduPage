@@ -1,31 +1,35 @@
 import { notFound } from 'next/navigation';
 import { conversationDetail } from '@/lib/queries';
-import { StageBadge, HandlerBadge, ago, money } from '@/components/ui';
+import { StageBadge, HandlerBadge, ago } from '@/components/ui';
 import { ReplyBox, StagePicker, StatusButtons, OrderButton } from '@/components/ThreadActions';
+import { ctx } from '@/lib/server-ctx';
+import { STAGE_KEY } from '@/lib/i18n';
 import type { LeadStage } from '@/lib/types';
+
+export const dynamic = 'force-dynamic';
 
 interface DraftLine {
   product_id: string; variant_id: string | null; product_name: string;
   qty: number; unit_price: number;
 }
 
-export const dynamic = 'force-dynamic';
-
 export default async function Thread({ params }: { params: Promise<{ id: string }> }) {
+  const { t, lang } = await ctx();
   const { id } = await params;
   const data = await conversationDetail(id);
   if (!data) notFound();
   const { convo, messages, events } = data;
 
-  // The most recent basket the AI assembled from live POS ids, if any.
   const draftOrder = [...messages].reverse()
     .map((m) => (m.ai as { draft_order?: DraftLine[] } | null)?.draft_order)
     .find((d): d is DraftLine[] => Array.isArray(d) && d.length > 0);
+
   const c = convo.msgr_contacts as unknown as {
     id: string; name: string | null; psid: string; stage: LeadStage; phone: string | null;
     address: string | null; source_type: string | null; source_ad_id: string | null;
     first_seen_at: string; tags: string[]; customer_id: string | null;
   };
+  const handler = { bot: t('ib_by_bot'), human: t('ib_by_human'), none: t('ib_by_none') };
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
@@ -34,72 +38,85 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
           <div>
             <div className="font-medium">{c.name ?? `PSID ${c.psid.slice(-6)}`}</div>
             <div className="mt-1 flex items-center gap-2">
-              <StageBadge stage={c.stage} />
-              <HandlerBadge by={convo.last_reply_by} />
+              <StageBadge stage={c.stage} label={t(STAGE_KEY[c.stage] ?? c.stage)} />
+              <HandlerBadge by={convo.last_reply_by} labels={handler} />
             </div>
           </div>
-          <StatusButtons conversationId={convo.id} />
+          <StatusButtons conversationId={convo.id}
+            labels={{ bot: t('th_give_bot'), mine: t('th_take'), close: t('th_close') }} />
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
           {messages.filter((m) => m.author !== 'system').map((m) => {
             const mine = m.direction === 'out';
             const bg = !mine ? 'bg-edge' : m.author === 'bot' ? 'bg-[#3987e5]/20' : 'bg-good/15';
+            const ai = m.ai as Record<string, unknown> | null;
             return (
               <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[70%] rounded-xl px-3 py-2 text-sm ${bg}`}>
-                  {m.text ?? <span className="italic text-muted">(ပုံ/ဖိုင်)</span>}
+                  {m.text ?? <span className="italic text-muted">{t('th_attachment')}</span>}
                   <div className="mt-1 text-[10px] text-muted">
-                    {m.author === 'bot' ? '🤖 Bot' : m.author === 'human' ? '👤 လူ' : ''}
-                    {m.ai && typeof m.ai === 'object' && 'confidence' in (m.ai as object)
-                      ? ` · ${Math.round(Number((m.ai as Record<string, unknown>).confidence) * 100)}% · ${String((m.ai as Record<string, unknown>).intent ?? '')}`
+                    {m.author === 'bot'
+                      ? t('ib_by_bot')
+                      : m.author === 'human'
+                      ? `${t('ib_by_human')}${ai?.replied_by ? ` · ${String(ai.replied_by)}` : ''}`
                       : ''}
-                    {' · '}{new Date(m.sent_at).toLocaleString()}
+                    {ai && 'confidence' in ai
+                      ? ` · ${Math.round(Number(ai.confidence) * 100)}% · ${String(ai.intent ?? '')}`
+                      : ''}
+                    {' · '}{new Date(m.sent_at).toLocaleString(lang === 'en' ? 'en-GB' : 'my-MM')}
                   </div>
                 </div>
               </div>
             );
           })}
-          {!messages.length && <div className="text-center text-sm text-muted">စာမရှိသေးပါ</div>}
+          {!messages.length && <div className="text-center text-sm text-muted">{t('th_no_messages')}</div>}
         </div>
 
-        <ReplyBox conversationId={convo.id} />
+        <ReplyBox conversationId={convo.id}
+          labels={{ placeholder: t('th_reply_ph'), send: t('th_send'), hint: t('th_send_hint'), failed: t('th_send_failed') }} />
       </div>
 
       <aside className="space-y-4">
         {convo.status === 'needs_human' && (
           <div className="card border-warn/50 p-3 text-sm">
-            <div className="label text-warn">လူ လိုက်စစ်ရန်</div>
+            <div className="label text-warn">{t('th_needs_human')}</div>
             <p className="mt-1">{convo.needs_human_reason}</p>
-            <p className="mt-1 text-xs text-muted">စောင့်နေတာ {ago(convo.needs_human_since)}</p>
+            <p className="mt-1 text-xs text-muted">{t('th_waiting', { t: ago(convo.needs_human_since, t) })}</p>
           </div>
         )}
 
         <div className="card space-y-2 p-3 text-sm">
-          <div className="label">ဖောက်သည် အချက်အလက်</div>
-          <Row k="Stage" v={<StagePicker contactId={c.id} stage={c.stage} />} />
-          <Row k="ဖုန်း" v={c.phone ?? '—'} />
-          <Row k="လိပ်စာ" v={c.address ?? '—'} />
-          <Row k="ဘယ်ကလာ" v={c.source_type ?? 'organic'} />
-          <Row k="Ad ID" v={c.source_ad_id ?? '—'} />
-          <Row k="POS customer" v={c.customer_id ? "ချိတ်ပြီး" : "မချိတ်ရသေး"} />
-          <Row k="ပထမဆုံးရောက်" v={new Date(c.first_seen_at).toLocaleDateString()} />
-          <Row k="စာအရေအတွက်" v={`${convo.inbound_count}↓ / ${convo.outbound_count}↑`} />
-          <Row k="Bot ဖြေ / လူဖြေ" v={`${convo.bot_reply_count} / ${convo.human_reply_count}`} />
+          <div className="label">{t('th_details')}</div>
+          <Row k={t('ib_stage')} v={<StagePicker contactId={c.id} stage={c.stage}
+            options={Object.entries(STAGE_KEY).map(([k, key]) => ({ value: k, label: t(key) }))} />} />
+          <Row k={t('th_phone')} v={c.phone ?? '—'} />
+          <Row k={t('th_address')} v={c.address ?? '—'} />
+          <Row k={t('th_source')} v={c.source_type ?? 'organic'} />
+          <Row k={t('th_ad_id')} v={c.source_ad_id ?? '—'} />
+          <Row k={t('th_pos_customer')} v={c.customer_id ? t('th_linked') : t('th_not_linked')} />
+          <Row k={t('th_first_seen')} v={new Date(c.first_seen_at).toLocaleDateString()} />
+          <Row k={t('th_counts')} v={`${convo.inbound_count}↓ / ${convo.outbound_count}↑`} />
+          <Row k={t('th_bot_human')} v={`${convo.bot_reply_count} / ${convo.human_reply_count}`} />
         </div>
 
-        <OrderButton contactId={c.id} draft={draftOrder} />
+        <OrderButton contactId={c.id} draft={draftOrder} labels={{
+          open: t('or_open'), prefilled: t('or_prefilled', { n: draftOrder?.length ?? 0 }),
+          title: t('or_title'), search: t('or_search'), out: t('or_out_of_stock'),
+          left: t('or_in_stock', { n: '' }), total: t('or_total'), save: t('or_save'),
+          cancel: t('or_cancel'), failed: t('or_failed'), note: t('or_note'),
+        }} />
 
         <div className="card p-3">
-          <div className="label mb-2">Stage မှတ်တမ်း</div>
+          <div className="label mb-2">{t('th_history')}</div>
           <ul className="space-y-1 text-xs text-muted">
             {events.map((e) => (
               <li key={e.id}>
                 {e.from_stage ?? '—'} → <span className="text-white">{e.to_stage}</span> · {e.reason}
-                <span className="ml-1">({ago(e.created_at)})</span>
+                <span className="ml-1">({ago(e.created_at, t)})</span>
               </li>
             ))}
-            {!events.length && <li>မှတ်တမ်းမရှိသေးပါ</li>}
+            {!events.length && <li>{t('th_no_history')}</li>}
           </ul>
         </div>
       </aside>

@@ -113,3 +113,82 @@ export async function followUpQueue() {
     .limit(200);
   return data ?? [];
 }
+
+
+export interface CustomerRow {
+  contact_id: string;
+  conversation_id: string | null;
+  name: string | null;
+  psid: string;
+  phone: string | null;
+  address: string | null;
+  stage: string;
+  tags: string[];
+  notes: string | null;
+  source_type: string | null;
+  source_ad_id: string | null;
+  customer_id: string | null;
+  first_seen_at: string;
+  last_inbound_at: string | null;
+  orders: number;
+  revenue: number;
+}
+
+/** The customer list. Messenger identity on the left, real POS money on the right. */
+export async function customerList(opts: {
+  q?: string; stage?: string; source?: string; limit?: number;
+}): Promise<CustomerRow[]> {
+  const db = admin();
+  let query = db
+    .from('msgr_contacts')
+    .select('id,name,psid,phone,address,stage,tags,notes,source_type,source_ad_id,customer_id,first_seen_at,last_inbound_at')
+    .order('last_inbound_at', { ascending: false, nullsFirst: false })
+    .limit(opts.limit ?? 300);
+
+  if (opts.stage) query = query.eq('stage', opts.stage);
+  if (opts.source === 'ad') query = query.not('source_ad_id', 'is', null);
+  if (opts.source === 'organic') query = query.is('source_ad_id', null);
+  if (opts.q) {
+    const term = opts.q.replace(/[%,]/g, ' ').trim();
+    if (term) query = query.or(`name.ilike.%${term}%,phone.ilike.%${term}%,psid.ilike.%${term}%`);
+  }
+
+  const { data: contacts } = await query;
+  const rows = contacts ?? [];
+  if (!rows.length) return [];
+
+  const ids = rows.map((r) => r.id);
+  const [{ data: convos }, { data: sales }] = await Promise.all([
+    db.from('msgr_conversations').select('id,contact_id').in('contact_id', ids),
+    db.from('v_msgr_sales').select('contact_id,total').in('contact_id', ids),
+  ]);
+
+  const convoOf = new Map((convos ?? []).map((c) => [c.contact_id, c.id as string]));
+  const money = new Map<string, { orders: number; revenue: number }>();
+  for (const s of sales ?? []) {
+    const cur = money.get(s.contact_id) ?? { orders: 0, revenue: 0 };
+    cur.orders += 1;
+    cur.revenue += Number(s.total) || 0;
+    money.set(s.contact_id, cur);
+  }
+
+  return rows.map((r) => ({
+    contact_id: r.id,
+    conversation_id: convoOf.get(r.id) ?? null,
+    name: r.name, psid: r.psid, phone: r.phone, address: r.address,
+    stage: r.stage, tags: r.tags ?? [], notes: r.notes,
+    source_type: r.source_type, source_ad_id: r.source_ad_id,
+    customer_id: r.customer_id,
+    first_seen_at: r.first_seen_at, last_inbound_at: r.last_inbound_at,
+    orders: money.get(r.id)?.orders ?? 0,
+    revenue: money.get(r.id)?.revenue ?? 0,
+  }));
+}
+
+/** Every tag in use, for the filter chips. */
+export async function allTags(): Promise<string[]> {
+  const { data } = await admin().from('msgr_contacts').select('tags').limit(2000);
+  const set = new Set<string>();
+  for (const r of data ?? []) for (const t of (r.tags ?? []) as string[]) if (t) set.add(t);
+  return [...set].sort();
+}

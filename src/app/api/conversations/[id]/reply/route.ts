@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { admin } from '@/lib/supabase';
 import { sendText } from '@/lib/meta';
 import { recordMessage, closeFollowUps } from '@/lib/crm';
+import { cookies } from 'next/headers';
+import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
@@ -9,7 +11,11 @@ export const runtime = 'nodejs';
  *  it to human_handling so the bot stops answering. */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const { text, agent } = (await req.json()) as { text?: string; agent?: string };
+  const { text } = (await req.json()) as { text?: string };
+
+  // Who is replying comes from the signed session, never from the request body.
+  const session = await verifySession((await cookies()).get(SESSION_COOKIE)?.value);
+  const agent = session?.email ?? null;
   if (!text?.trim()) return NextResponse.json({ error: 'empty message' }, { status: 400 });
 
   const db = admin();
@@ -29,6 +35,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   await recordMessage({
     conversationId: id, contactId: contact.id, mid,
     direction: 'out', author: 'human', text,
+    ai: agent ? { replied_by: agent } : null,
   });
 
   const now = new Date().toISOString();
