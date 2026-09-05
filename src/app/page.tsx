@@ -16,7 +16,7 @@ export default async function Overview({
   const settings = await getSettings();
   const cur = settings.ad_currency || 'USD';
   const [o, daily, stages] = await Promise.all([
-    overview(days, Number(settings.mmk_per_usd) || 4500), dailyFunnel(days), stageCounts(days),
+    overview(days), dailyFunnel(days), stageCounts(days),
   ]);
 
   const short = (d: string) => d.slice(5);
@@ -53,7 +53,7 @@ export default async function Overview({
               tone={o.costPerOrder && o.revenue / Math.max(o.orders, 1) < o.costPerOrder ? 'bad' : undefined} />
         <Stat label={t('ov_roas')} value={o.roas != null ? `${o.roas.toFixed(2)}x` : '—'}
               tone={o.roas == null ? undefined : o.roas >= 2 ? 'good' : o.roas >= 1 ? 'warn' : 'bad'}
-              sub={t('ov_revenue', { v: money(o.revenue) })} />
+              sub={t('ov_revenue', { v: `${money(o.revenueUsd, cur, 2)} · ${money(o.revenue)}` })} />
       </section>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">

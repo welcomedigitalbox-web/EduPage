@@ -11,7 +11,7 @@ export interface SettingsLabels {
   stores: string; storesHint: string; defaultStore: string;
   quoteStock: string; language: string; langMy: string; langEn: string; langMixed: string;
   persona: string; handoffMsg: string; handoff: string; minConf: string; maxTurns: string;
-  followupHours: string; ghostHours: string; adCurrency: string; fxRate: string;
+  followupHours: string; ghostHours: string; adCurrency: string;
   save: string; saved: string;
 }
 
@@ -92,16 +92,10 @@ export function SettingsForm({
         <textarea className={INPUT} rows={2} value={s.persona} onChange={(e) => set('persona', e.target.value)} />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label={labels.adCurrency}>
-          <input className={INPUT} value={s.ad_currency ?? 'USD'}
-            onChange={(e) => set('ad_currency', e.target.value.toUpperCase().slice(0, 4))} />
-        </Field>
-        <Field label={labels.fxRate}>
-          <input className={INPUT} type="number" value={s.mmk_per_usd ?? 4500}
-            onChange={(e) => set('mmk_per_usd', Number(e.target.value))} />
-        </Field>
-      </div>
+      <Field label={labels.adCurrency}>
+        <input className={INPUT} value={s.ad_currency ?? 'USD'}
+          onChange={(e) => set('ad_currency', e.target.value.toUpperCase().slice(0, 4))} />
+      </Field>
 
       <Field label={labels.handoffMsg}>
         <textarea className={INPUT} rows={2} value={s.handoff_message ?? ''}

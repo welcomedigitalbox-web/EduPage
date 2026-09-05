@@ -2,7 +2,8 @@ import { admin } from './supabase';
 
 export interface DailyRow {
   day: string; new_contacts: number; engaged_contacts: number;
-  no_convo_contacts: number; orders: number; revenue: number; spend: number;
+  no_convo_contacts: number; orders: number; revenue: number;
+  revenue_usd: number; spend: number;
 }
 
 export async function dailyFunnel(days = 30): Promise<DailyRow[]> {
@@ -22,7 +23,7 @@ export async function stageCounts(days = 30) {
 }
 
 /** The headline numbers. Every one of these maps to a question Kay asked. */
-export async function overview(days = 30, mmkPerUsd = 4500) {
+export async function overview(days = 30) {
   const db = admin();
   const fromIso = new Date(Date.now() - days * 86400_000).toISOString();
   const fromDay = fromIso.slice(0, 10);
@@ -31,7 +32,7 @@ export async function overview(days = 30, mmkPerUsd = 4500) {
     await Promise.all([
       db.from('msgr_contacts').select('id', { count: 'exact', head: true }).gte('first_seen_at', fromIso),
       db.from('msgr_conversations').select('id', { count: 'exact', head: true }).gt('inbound_count', 1),
-      db.from('v_msgr_sales').select('total').gte('created_at', fromIso),
+      db.from('v_msgr_sales').select('total,total_usd').gte('created_at', fromIso),
       db.from('msgr_ad_daily').select('spend').gte('date', fromDay),
       db.from('msgr_conversations').select('id', { count: 'exact', head: true }).eq('status', 'needs_human'),
       db.from('msgr_conversations').select('id', { count: 'exact', head: true }).eq('last_reply_by', 'bot'),
@@ -40,6 +41,8 @@ export async function overview(days = 30, mmkPerUsd = 4500) {
     ]);
 
   const revenue = (orders.data ?? []).reduce((s, o) => s + Number(o.total), 0);
+  // Each sale was already converted at its own day's rate by the view.
+  const revenueUsd = (orders.data ?? []).reduce((s, o) => s + Number(o.total_usd ?? 0), 0);
   const spend = (spendRes.data ?? []).reduce((s, r) => s + Number(r.spend), 0);
   const orderCount = orders.data?.length ?? 0;
   const leads = contacts.count ?? 0;
@@ -59,10 +62,10 @@ export async function overview(days = 30, mmkPerUsd = 4500) {
     spend,
     costPerLead: leads ? spend / leads : null,
     costPerOrder: orderCount ? spend / orderCount : null,
-    // Spend is billed in the ad account's currency (USD) while POS revenue is
-    // MMK, so ROAS has to convert before dividing or the number is nonsense.
-    roas: spend ? (revenue / mmkPerUsd) / spend : null,
-    revenueUsd: revenue / mmkPerUsd,
+    revenueUsd,
+    // Spend is billed in USD; revenue_usd was converted per sale at that day's
+    // rate, so the two sides of this ratio are finally the same currency.
+    roas: spend ? revenueUsd / spend : null,
     convRate: leads ? (orderCount / leads) * 100 : null,
     needsHuman: needsHuman.count ?? 0,
     botHandled: botHandled.count ?? 0,

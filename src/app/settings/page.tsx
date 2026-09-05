@@ -4,6 +4,7 @@ import { SettingsForm, KbEditor } from '@/components/SettingsForm';
 import { ctx } from '@/lib/server-ctx';
 import { KbPreview } from '@/components/KbPreview';
 import { UserManager } from '@/components/Users';
+import { FxRates } from '@/components/FxRates';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +17,8 @@ export default async function Settings() {
     admin().from('stores').select('id,name,region')
       .eq('is_active', true).eq('is_warehouse', false).order('name'),
   ]);
+  const { data: fx } = await admin()
+    .from('msgr_fx_rates').select('date,mmk_per_usd,note').order('date', { ascending: false }).limit(90);
   const { data: users } = await admin()
     .from('msgr_users').select('id,email,name,role,is_active,last_login_at').order('created_at');
 
@@ -39,7 +42,7 @@ export default async function Settings() {
             langMixed: L('se_lang_mixed'), persona: L('se_persona'), handoffMsg: L('se_handoff_msg'), handoff: L('se_handoff'),
             minConf: L('se_min_conf'), maxTurns: L('se_max_turns'),
             followupHours: L('se_followup_hours'), ghostHours: L('se_ghost_hours'),
-            adCurrency: L('se_ad_currency'), fxRate: L('se_fx_rate'),
+            adCurrency: L('se_ad_currency'),
             save: L('se_save'), saved: L('se_saved'),
           }}
         />
@@ -65,6 +68,16 @@ export default async function Settings() {
             titlePh: L('se_kb_title_ph'), bodyPh: L('se_kb_body_ph'),
             addBtn: L('se_kb_add_btn'), del: L('se_kb_delete'), empty: L('se_kb_empty'),
             edit: L('se_kb_edit'), save: L('se_kb_save'), cancel: L('se_kb_cancel'),
+          }}
+        />
+      </section>
+
+      <section className="space-y-3 lg:col-span-2">
+        <FxRates
+          rows={(fx ?? []) as never}
+          labels={{
+            title: t('fx_title'), sub: t('fx_sub'), date: t('fx_date'), rate: t('fx_rate'),
+            add: t('fx_add'), del: t('fx_del'), empty: t('fx_empty'), effective: t('fx_effective'),
           }}
         />
       </section>
