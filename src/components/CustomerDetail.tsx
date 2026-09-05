@@ -151,14 +151,20 @@ interface PosCustomerHit {
   lifetime_spend: number;
 }
 
+/** A server component cannot hand a function across the client boundary, so
+ *  the formatter lives here rather than being passed in as a prop. */
+function fmtMoney(n: number | null | undefined, cur = 'MMK') {
+  if (n == null) return '—';
+  return `${Math.round(n).toLocaleString()} ${cur}`;
+}
+
 export function HouseholdLink({
-  contactId, linkedCustomerId, household, labels, money,
+  contactId, linkedCustomerId, household, labels,
 }: {
   contactId: string;
   linkedCustomerId: string | null;
   household: { id: string; name: string | null; psid: string; phone: string | null }[];
   labels: HouseholdLabels;
-  money: (n: number) => string;
 }) {
   const router = useRouter();
   const [q, setQ] = useState('');
@@ -200,7 +206,7 @@ export function HouseholdLink({
               <div className="min-w-0">
                 <div className="truncate">{c.name}</div>
                 <div className="text-[11px] text-muted">
-                  {c.phone ?? c.email ?? '—'} · {labels.spent.replace('{v}', money(c.lifetime_spend))}
+                  {c.phone ?? c.email ?? '—'} · {labels.spent.replace('{v}', fmtMoney(c.lifetime_spend))}
                 </div>
               </div>
               <button className="btn text-xs" disabled={busy || c.id === linkedCustomerId}

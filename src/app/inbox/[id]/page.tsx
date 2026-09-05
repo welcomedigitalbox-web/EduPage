@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { conversationDetail } from '@/lib/queries';
 import { StageBadge, HandlerBadge, ago } from '@/components/ui';
-import { ReplyBox, StagePicker, StatusButtons, OrderButton } from '@/components/ThreadActions';
+import { ReplyBox, StagePicker, StatusButtons, OrderButton, PosCustomerBox } from '@/components/ThreadActions';
 import { ctx } from '@/lib/server-ctx';
 import { STAGE_KEY } from '@/lib/i18n';
 import type { LeadStage } from '@/lib/types';
@@ -28,6 +28,7 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
     id: string; name: string | null; psid: string; stage: LeadStage; phone: string | null;
     address: string | null; source_type: string | null; source_ad_id: string | null;
     first_seen_at: string; tags: string[]; customer_id: string | null;
+    email: string | null;
   };
   const handler = { bot: t('ib_by_bot'), human: t('ib_by_human'), none: t('ib_by_none') };
 
@@ -99,6 +100,21 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
           <Row k={t('th_counts')} v={`${convo.inbound_count}↓ / ${convo.outbound_count}↑`} />
           <Row k={t('th_bot_human')} v={`${convo.bot_reply_count} / ${convo.human_reply_count}`} />
         </div>
+
+        <PosCustomerBox
+          contactId={c.id}
+          customerId={c.customer_id}
+          initial={{
+            name: c.name ?? '', phone: c.phone ?? '',
+            email: c.email ?? '', address: c.address ?? '',
+          }}
+          labels={{
+            title: t('th_pos_customer'), name: t('cd_name'), phone: t('cd_phone'),
+            email: t('cd_email'), address: t('cd_address'), create: t('th_pos_create'),
+            open: t('th_pos_open'), linked: t('th_linked'), need: t('th_pos_need'),
+            failed: t('th_pos_failed'), saving: t('th_pos_saving'),
+          }}
+        />
 
         <OrderButton contactId={c.id} draft={draftOrder} labels={{
           open: t('or_open'), prefilled: t('or_prefilled', { n: draftOrder?.length ?? 0 }),

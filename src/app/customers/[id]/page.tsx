@@ -81,7 +81,6 @@ export default async function CustomerDetail({ params }: { params: Promise<{ id:
             contactId={contact.id}
             linkedCustomerId={contact.customer_id ?? null}
             household={household}
-            money={money}
             labels={{
               title: t('hh_title'), sub: t('hh_sub'), search: t('hh_search'),
               link: t('hh_link'), unlink: t('hh_unlink'), noneFound: t('hh_none_found'),
