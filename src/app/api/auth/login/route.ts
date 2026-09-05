@@ -1,43 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { admin } from '@/lib/supabase';
-import { env } from '@/lib/env';
-import { signSession, SESSION_COOKIE, SESSION_DAYS } from '@/lib/session';
+import { verifyPassword } from '@/lib/password';
+import { signSession, SESSION_COOKIE, SESSION_DAYS, type Role } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
-/** Signs in against the POS Supabase project, so staff use the same account
- *  they already have. The POS `profiles` row supplies the role. */
 export async function POST(req: NextRequest) {
   const { email, password } = (await req.json()) as { email?: string; password?: string };
-  if (!email || !password) {
-    return NextResponse.json({ error: 'missing' }, { status: 400 });
-  }
+  if (!email || !password) return NextResponse.json({ error: 'missing' }, { status: 400 });
 
-  const anon = createClient(env.supabaseUrl(), process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '', {
-    auth: { persistSession: false },
-  });
-  const { data, error } = await anon.auth.signInWithPassword({ email, password });
-  if (error || !data.user) {
+  const db = admin();
+  const { data: user } = await db
+    .from('msgr_users')
+    .select('id,email,name,password_hash,role,is_active')
+    .eq('email', email.trim().toLowerCase())
+    .maybeSingle();
+
+  // Same response whether the account is missing, disabled or the password is
+  // wrong — otherwise the form doubles as a way to enumerate staff emails.
+  if (!user || !user.is_active || !(await verifyPassword(password, user.password_hash))) {
     return NextResponse.json({ error: 'bad_credentials' }, { status: 401 });
   }
 
-  // Read the profile with the service role so RLS on `profiles` can't lock us out.
-  const { data: profile } = await admin()
-    .from('profiles').select('id,email,role,store_id').eq('id', data.user.id).maybeSingle();
-  if (!profile) {
-    return NextResponse.json({ error: 'no_profile' }, { status: 403 });
-  }
+  await db.from('msgr_users').update({ last_login_at: new Date().toISOString() }).eq('id', user.id);
 
   const token = await signSession({
-    uid: data.user.id,
-    email: profile.email ?? data.user.email ?? '',
-    role: profile.role ?? 'cashier',
-    store_id: profile.store_id ?? null,
+    uid: user.id,
+    email: user.email,
+    name: user.name ?? null,
+    role: user.role as Role,
     exp: Date.now() + SESSION_DAYS * 86400_000,
   });
 
-  const res = NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true, role: user.role });
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true, sameSite: 'lax', secure: true, path: '/',
     maxAge: SESSION_DAYS * 86400,

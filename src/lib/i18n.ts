@@ -232,6 +232,33 @@ const D: Dict = {
   kb_out_of_stock: ['ကုန်နေပြီ', 'out of stock'],
   kb_show_all: ['အားလုံးကြည့်', 'Show all'],
 
+
+  // users
+  us_title: ['အသုံးပြုသူများ', 'Users'],
+  us_sub: ['ဒီ account တွေက Messenger dashboard အတွက်သာ — POS နဲ့ မဆိုင်ပါ',
+           'These accounts are for the Messenger dashboard only, separate from the POS'],
+  us_email: ['အီးမေးလ်', 'Email'],
+  us_name: ['နာမည်', 'Name'],
+  us_role: ['တာဝန်', 'Role'],
+  us_role_agent: ['စာဖြေ staff', 'Agent'],
+  us_role_manager: ['Manager', 'Manager'],
+  us_role_agent_hint: ['Inbox, Follow-up, ဖောက်သည်များ ကြည့်လို့ရ', 'Sees Inbox, Follow-up and Customers'],
+  us_role_manager_hint: ['အားလုံး + Ads + Settings + user စီမံခန့်ခွဲမှု', 'Everything, plus Ads, Settings and users'],
+  us_password: ['စကားဝှက်', 'Password'],
+  us_password_hint: ['အနည်းဆုံး ၈ လုံး', 'At least 8 characters'],
+  us_add: ['အသုံးပြုသူ ထည့်မယ်', 'Add user'],
+  us_active: ['သုံးနေဆဲ', 'Active'],
+  us_disabled: ['ပိတ်ထား', 'Disabled'],
+  us_disable: ['ပိတ်မယ်', 'Disable'],
+  us_enable: ['ဖွင့်မယ်', 'Enable'],
+  us_reset_pw: ['စကားဝှက် ပြောင်းမယ်', 'Reset password'],
+  us_last_login: ['နောက်ဆုံးဝင်', 'Last login'],
+  us_never: ['မဝင်ဖူးသေး', 'Never'],
+  us_email_taken: ['ဒီအီးမေးလ် သုံးပြီးသားပါ', 'That email is already in use'],
+  us_pw_short: ['စကားဝှက် တိုလွန်းပါတယ်', 'Password is too short'],
+  us_saved: ['သိမ်းပြီး', 'Saved'],
+  us_self_note: ['ကိုယ့်ကိုယ်ကို မပိတ်နိုင်ပါ', 'You cannot disable your own account'],
+
   // time
   t_just_now: ['ခုနလေးတင်', 'just now'],
   t_min: ['{n} မိနစ်', '{n}m'],

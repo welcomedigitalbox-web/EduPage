@@ -15,7 +15,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   // Who is replying comes from the signed session, never from the request body.
   const session = await verifySession((await cookies()).get(SESSION_COOKIE)?.value);
-  const agent = session?.email ?? null;
+  const agent = session?.name || session?.email || null;
   if (!text?.trim()) return NextResponse.json({ error: 'empty message' }, { status: 400 });
 
   const db = admin();
@@ -43,6 +43,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     status: 'human_handling',
     last_reply_by: 'human',
     assigned_to: agent ?? convo.assigned_to,
+    assigned_user_id: session?.uid ?? convo.assigned_user_id,
     outbound_count: (convo.outbound_count ?? 0) + 1,
     human_reply_count: (convo.human_reply_count ?? 0) + 1,
     last_message_at: now,

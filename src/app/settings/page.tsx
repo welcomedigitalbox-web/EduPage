@@ -3,17 +3,20 @@ import { admin } from '@/lib/supabase';
 import { SettingsForm, KbEditor } from '@/components/SettingsForm';
 import { ctx } from '@/lib/server-ctx';
 import { KbPreview } from '@/components/KbPreview';
+import { UserManager } from '@/components/Users';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Settings() {
-  const { t } = await ctx();
+  const { t, session } = await ctx();
   const settings = await getSettings();
   const [kb, kbRes, storeRes] = await Promise.all([
     getKb(settings),
     admin().from('msgr_kb_items').select('id,kind,title,body').eq('is_active', true).order('kind').limit(200),
     admin().from('stores').select('id,name').eq('is_active', true).order('name'),
   ]);
+  const { data: users } = await admin()
+    .from('msgr_users').select('id,email,name,role,is_active,last_login_at').order('created_at');
 
   const L = (k: string) => t(k);
   const products = kb.filter((k) => k.kind === 'product');
@@ -57,6 +60,26 @@ export default async function Settings() {
             add: L('se_kb_add'), policy: L('se_kb_kind_policy'), faq: L('se_kb_kind_faq'),
             titlePh: L('se_kb_title_ph'), bodyPh: L('se_kb_body_ph'),
             addBtn: L('se_kb_add_btn'), del: L('se_kb_delete'), empty: L('se_kb_empty'),
+          }}
+        />
+      </section>
+
+      <section className="space-y-3 lg:col-span-2">
+        <h1 className="text-xl font-semibold">{t('us_title')}</h1>
+        <p className="text-sm text-muted">{t('us_sub')}</p>
+        <UserManager
+          users={(users ?? []) as never}
+          meId={session?.uid ?? ''}
+          labels={{
+            email: L('us_email'), name: L('us_name'), role: L('us_role'),
+            agent: L('us_role_agent'), manager: L('us_role_manager'),
+            agentHint: L('us_role_agent_hint'), managerHint: L('us_role_manager_hint'),
+            password: L('us_password'), passwordHint: L('us_password_hint'),
+            add: L('us_add'), active: L('us_active'), disabled: L('us_disabled'),
+            disable: L('us_disable'), enable: L('us_enable'), resetPw: L('us_reset_pw'),
+            lastLogin: L('us_last_login'), never: L('us_never'),
+            emailTaken: L('us_email_taken'), pwShort: L('us_pw_short'),
+            saved: L('us_saved'), selfNote: L('us_self_note'),
           }}
         />
       </section>

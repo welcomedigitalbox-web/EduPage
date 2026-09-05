@@ -1,11 +1,21 @@
 import type { Lang } from './i18n';
 
+export type Role = 'agent' | 'manager';
+
 export interface Session {
   uid: string;
   email: string;
-  role: string;
-  store_id: string | null;
+  name: string | null;
+  role: Role;
   exp: number;
+}
+
+/** Pages an agent may not open. Managers see everything. */
+export const MANAGER_ONLY = ['/ads', '/settings'];
+
+export function canOpen(role: Role, pathname: string): boolean {
+  if (role === 'manager') return true;
+  return !MANAGER_ONLY.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 const enc = new TextEncoder();

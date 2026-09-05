@@ -10,12 +10,12 @@ export const metadata: Metadata = {
 };
 
 const NAV = [
-  { href: '/', key: 'nav_overview' },
-  { href: '/inbox', key: 'nav_inbox' },
-  { href: '/customers', key: 'nav_customers' },
-  { href: '/followups', key: 'nav_followups' },
-  { href: '/ads', key: 'nav_ads' },
-  { href: '/settings', key: 'nav_settings' },
+  { href: '/', key: 'nav_overview', managerOnly: false },
+  { href: '/inbox', key: 'nav_inbox', managerOnly: false },
+  { href: '/customers', key: 'nav_customers', managerOnly: false },
+  { href: '/followups', key: 'nav_followups', managerOnly: false },
+  { href: '/ads', key: 'nav_ads', managerOnly: true },
+  { href: '/settings', key: 'nav_settings', managerOnly: true },
 ];
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -30,7 +30,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <div className="mb-4 text-sm font-semibold">{t('app_name')}</div>
               <div className="mb-4"><LangToggle lang={lang} /></div>
               <nav className="flex-1 space-y-1">
-                {NAV.map((n) => (
+                {NAV.filter((n) => !n.managerOnly || session.role === 'manager').map((n) => (
                   <Link key={n.href} href={n.href}
                     className="block rounded-lg px-3 py-2 text-sm text-muted hover:bg-edge hover:text-white">
                     {t(n.key)}
@@ -38,7 +38,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 ))}
               </nav>
               <div className="border-t border-edge pt-2">
-                <div className="truncate px-3 py-1 text-xs text-muted">{session.email}</div>
+                <div className="truncate px-3 py-1 text-xs text-muted">
+                  {session.name || session.email}
+                  <span className="ml-1 opacity-70">
+                    · {t(session.role === 'manager' ? 'us_role_manager' : 'us_role_agent')}
+                  </span>
+                </div>
                 <SignOut label={t('sign_out')} />
               </div>
             </aside>
