@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { admin } from '@/lib/supabase';
 import { getSettings, fulfilmentStores } from '@/lib/crm';
-import { findCustomer, upsertPosCustomer } from '@/lib/pos';
+import { findCustomer, upsertPosCustomer, fetchStores } from '@/lib/pos';
 
 export const runtime = 'nodejs';
 
@@ -54,10 +54,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   }
 
   const settings = await getSettings();
+  // Settings may not name a shop yet. Rather than refuse to create the
+  // customer, fall back to any real shop in the POS — staff can move them.
   const storeId =
     (b.store_id ?? (merged.store_id as string)) ||
     settings.default_store_id ||
-    fulfilmentStores(settings)[0];
+    fulfilmentStores(settings)[0] ||
+    (await fetchStores())[0]?.id;
   if (!storeId) return NextResponse.json({ error: 'no_store' }, { status: 400 });
 
   // Reuse the existing record if this person already shops here.

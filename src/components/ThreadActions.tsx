@@ -298,68 +298,25 @@ export function FollowUpActions({
 }
 
 /**
- * Turn a Messenger contact into a real POS customer without leaving the
- * thread. The POS needs a phone or an email to dedupe against, so the fields
- * are here rather than behind a bare "create" button.
+ * The full CRM form lives on the customer page — this is the way in from the
+ * thread, so staff do not have to hunt for the same person twice.
  */
 export function PosCustomerBox({
-  contactId, customerId, initial, labels,
+  contactId, customerId, labels,
 }: {
   contactId: string;
   customerId: string | null;
-  initial: { name: string; phone: string; email: string; address: string };
-  labels: {
-    title: string; name: string; phone: string; email: string; address: string;
-    create: string; open: string; linked: string; need: string; failed: string; saving: string;
-  };
+  labels: { title: string; create: string; open: string; linked: string; notLinked: string };
 }) {
-  const router = useRouter();
-  const [f, setF] = useState(initial);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  if (customerId) {
-    return (
-      <div className="card space-y-2 p-3 text-sm">
-        <div className="label">{labels.title}</div>
-        <p className="text-xs text-good">{labels.linked}</p>
-        <a className="btn block text-center text-xs" href={`/customers/${contactId}`}>{labels.open}</a>
-      </div>
-    );
-  }
-
-  async function create() {
-    if (!f.phone.trim() && !f.email.trim()) { setErr(labels.need); return; }
-    setBusy(true); setErr(null);
-    const res = await fetch(`/api/contacts/${contactId}/profile`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...f, sync_pos: true }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      const b = await res.json().catch(() => ({}));
-      setErr(b.error === 'need_phone_or_email' ? labels.need : `${labels.failed}: ${b.error ?? res.status}`);
-      return;
-    }
-    router.refresh();
-  }
-
-  const input = 'w-full rounded-lg border border-edge bg-ink p-2 text-xs outline-none focus:border-brand';
   return (
-    <div className="card space-y-2 p-3">
+    <div className="card space-y-2 p-3 text-sm">
       <div className="label">{labels.title}</div>
-      <input className={input} placeholder={labels.name} value={f.name}
-        onChange={(e) => setF({ ...f, name: e.target.value })} />
-      <input className={input} placeholder={labels.phone} value={f.phone}
-        onChange={(e) => setF({ ...f, phone: e.target.value })} />
-      <input className={input} placeholder={labels.email} value={f.email}
-        onChange={(e) => setF({ ...f, email: e.target.value })} />
-      <input className={input} placeholder={labels.address} value={f.address}
-        onChange={(e) => setF({ ...f, address: e.target.value })} />
-      <button className="btn-primary w-full text-xs" disabled={busy} onClick={create}>
-        {busy ? labels.saving : labels.create}
-      </button>
-      {err && <p className="text-xs text-bad">{err}</p>}
+      <p className={`text-xs ${customerId ? 'text-good' : 'text-muted'}`}>
+        {customerId ? labels.linked : labels.notLinked}
+      </p>
+      <a className="btn-primary block text-center text-xs" href={`/customers/${contactId}`}>
+        {customerId ? labels.open : labels.create}
+      </a>
     </div>
   );
 }

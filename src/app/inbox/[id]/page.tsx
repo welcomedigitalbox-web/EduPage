@@ -104,15 +104,9 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
         <PosCustomerBox
           contactId={c.id}
           customerId={c.customer_id}
-          initial={{
-            name: c.name ?? '', phone: c.phone ?? '',
-            email: c.email ?? '', address: c.address ?? '',
-          }}
           labels={{
-            title: t('th_pos_customer'), name: t('cd_name'), phone: t('cd_phone'),
-            email: t('cd_email'), address: t('cd_address'), create: t('th_pos_create'),
-            open: t('th_pos_open'), linked: t('th_linked'), need: t('th_pos_need'),
-            failed: t('th_pos_failed'), saving: t('th_pos_saving'),
+            title: t('th_pos_customer'), create: t('th_pos_create'),
+            open: t('th_pos_open'), linked: t('th_linked'), notLinked: t('th_not_linked'),
           }}
         />
 
