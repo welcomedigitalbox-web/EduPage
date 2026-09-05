@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { admin } from '@/lib/supabase';
-import { getSettings } from '@/lib/crm';
+import { getSettings, fulfilmentStores } from '@/lib/crm';
 import { createPendingSale, findCustomerByPhone, createCustomer, type OrderLine } from '@/lib/pos';
 
 export const runtime = 'nodejs';
@@ -33,11 +33,16 @@ export async function POST(req: NextRequest) {
     .eq('id', b.contact_id).single();
   if (!contact) return NextResponse.json({ error: 'contact not found' }, { status: 404 });
 
-  const storeId = b.store_id ?? contact.store_id ?? settings.default_store_id;
+  const allowed = fulfilmentStores(settings);
+  const storeId = b.store_id ?? contact.store_id ?? settings.default_store_id ?? allowed[0];
   if (!storeId) {
     return NextResponse.json(
-      { error: 'No store set. Pick a default store in Settings first.' }, { status: 400 }
+      { error: 'No fulfilment store configured. Pick one in Settings first.' }, { status: 400 }
     );
+  }
+  // Never let a typo route an order to a shop that is not meant to fulfil online.
+  if (allowed.length && !allowed.includes(storeId)) {
+    return NextResponse.json({ error: 'store_not_allowed' }, { status: 400 });
   }
 
   // Reuse the POS customer record if this phone number already shops here,

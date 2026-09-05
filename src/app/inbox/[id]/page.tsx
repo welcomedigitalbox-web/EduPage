@@ -105,6 +105,10 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
           title: t('or_title'), search: t('or_search'), out: t('or_out_of_stock'),
           left: t('or_in_stock', { n: '' }), total: t('or_total'), save: t('or_save'),
           cancel: t('or_cancel'), failed: t('or_failed'), note: t('or_note'),
+          store: t('or_store'), storeAuto: t('or_store_auto'),
+          stockHere: t('or_stock_here', { n: '{n}' }),
+          stockTotal: t('or_stock_total', { n: '{n}' }),
+          notEnough: t('or_not_enough'),
         }} />
 
         <div className="card p-3">

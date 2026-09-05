@@ -13,7 +13,8 @@ export default async function Settings() {
   const [kb, kbRes, storeRes] = await Promise.all([
     getKb(settings),
     admin().from('msgr_kb_items').select('id,kind,title,body').eq('is_active', true).order('kind').limit(200),
-    admin().from('stores').select('id,name').eq('is_active', true).order('name'),
+    admin().from('stores').select('id,name,region')
+      .eq('is_active', true).eq('is_warehouse', false).order('name'),
   ]);
   const { data: users } = await admin()
     .from('msgr_users').select('id,email,name,role,is_active,last_login_at').order('created_at');
@@ -32,6 +33,8 @@ export default async function Settings() {
           labels={{
             enabled: L('se_enabled'), business: L('se_business'), store: L('se_store'),
             storeHint: L('se_store_hint'), pick: L('se_pick'), quoteStock: L('se_quote_stock'),
+            stores: L('se_stores'), storesHint: L('se_stores_hint'),
+            defaultStore: L('se_default_store'),
             language: L('se_language'), langMy: L('se_lang_my'), langEn: L('se_lang_en'),
             langMixed: L('se_lang_mixed'), persona: L('se_persona'), handoff: L('se_handoff'),
             minConf: L('se_min_conf'), maxTurns: L('se_max_turns'),

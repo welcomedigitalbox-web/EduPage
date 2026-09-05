@@ -57,6 +57,7 @@ export interface BotSettings {
   is_enabled: boolean;
   business_name: string;
   default_store_id: string | null;
+  fulfilment_store_ids: string[];
   quote_stock: boolean;
   max_kb_products: number;
   language: string;

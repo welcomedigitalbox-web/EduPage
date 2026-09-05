@@ -8,6 +8,7 @@ const INPUT =
 
 export interface SettingsLabels {
   enabled: string; business: string; store: string; storeHint: string; pick: string;
+  stores: string; storesHint: string; defaultStore: string;
   quoteStock: string; language: string; langMy: string; langEn: string; langMixed: string;
   persona: string; handoff: string; minConf: string; maxTurns: string;
   followupHours: string; ghostHours: string; save: string; saved: string;
@@ -17,7 +18,7 @@ export function SettingsForm({
   initial, stores, labels,
 }: {
   initial: BotSettings;
-  stores: { id: string; name: string }[];
+  stores: { id: string; name: string; region: string | null }[];
   labels: SettingsLabels;
 }) {
   const [s, setS] = useState(initial);
@@ -39,13 +40,38 @@ export function SettingsForm({
         <input className={INPUT} value={s.business_name} onChange={(e) => set('business_name', e.target.value)} />
       </Field>
 
-      <Field label={labels.store}>
+      <Field label={labels.stores}>
+        <div className="space-y-1 rounded-lg border border-edge p-2">
+          {stores.map((st) => {
+            const on = (s.fulfilment_store_ids ?? []).includes(st.id);
+            return (
+              <label key={st.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox" checked={on}
+                  onChange={(e) => {
+                    const cur = new Set(s.fulfilment_store_ids ?? []);
+                    if (e.target.checked) cur.add(st.id); else cur.delete(st.id);
+                    set('fulfilment_store_ids', [...cur]);
+                  }}
+                />
+                <span>{st.name}</span>
+                {st.region && <span className="text-xs text-muted">· {st.region}</span>}
+              </label>
+            );
+          })}
+          {!stores.length && <p className="text-xs text-muted">{labels.pick}</p>}
+        </div>
+        <p className="mt-1 text-[11px] text-muted">{labels.storesHint}</p>
+      </Field>
+
+      <Field label={labels.defaultStore}>
         <select className={INPUT} value={s.default_store_id ?? ''}
           onChange={(e) => set('default_store_id', e.target.value || null)}>
           <option value="">{labels.pick}</option>
-          {stores.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
+          {stores
+            .filter((st) => (s.fulfilment_store_ids ?? []).includes(st.id))
+            .map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
         </select>
-        <p className="mt-1 text-[11px] text-muted">{labels.storeHint}</p>
       </Field>
 
       <label className="flex items-center justify-between">

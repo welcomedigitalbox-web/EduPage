@@ -11,28 +11,83 @@ export interface PosProduct {
   display_name: string;
   sku: string | null;
   price: number;
+  /** Pooled across every fulfilment store. */
   stock_qty: number;
+  /** store_id -> units on hand, so the dashboard can route the order. */
+  by_store: Record<string, number>;
   category: string | null;
 }
 
-/** Flattens products + variants + this store's stock into the sellable list,
- *  mirroring `fetchSellableItems` in the POS app. */
-export async function fetchSellable(storeId: string, limit = 120): Promise<PosProduct[]> {
+export interface StoreRow {
+  id: string;
+  name: string;
+  region: string | null;
+}
+
+export async function fetchStores(): Promise<StoreRow[]> {
+  const { data } = await admin()
+    .from('stores').select('id,name,region')
+    .eq('is_active', true).eq('is_warehouse', false).order('name');
+  return (data ?? []) as StoreRow[];
+}
+
+/** Picks the shop that should ship this order: the one in the customer's city
+ *  that actually has the stock, else any shop with stock, else nothing. */
+export function pickStore(
+  stores: StoreRow[],
+  address: string | null,
+  byStore: Record<string, number>,
+  needed = 1
+): string | null {
+  const text = (address ?? '').toLowerCase();
+  const inCity = stores.filter(
+    (s) => s.region && text.includes(s.region.toLowerCase()) && (byStore[s.id] ?? 0) >= needed
+  );
+  if (inCity.length) return inCity[0].id;
+
+  const withStock = stores
+    .filter((s) => (byStore[s.id] ?? 0) >= needed)
+    .sort((a, b) => (byStore[b.id] ?? 0) - (byStore[a.id] ?? 0));
+  return withStock[0]?.id ?? null;
+}
+
+/** Flattens products + variants + stock across several stores into one
+ *  sellable list, mirroring `fetchSellableItems` in the POS app.
+ *  A product hidden in one shop is still sellable if another shop offers it. */
+export async function fetchSellablePooled(storeIds: string[], limit = 120): Promise<PosProduct[]> {
   const db = admin();
+  if (!storeIds.length) return [];
 
   const [{ data: products }, { data: variants }, { data: inv }, { data: cats }, { data: off }] =
     await Promise.all([
       db.from('products').select('id,name,sku,price,category_id,is_active').eq('is_active', true).order('name'),
       db.from('product_variants').select('id,product_id,variant_name,sku,price_override,is_active').eq('is_active', true),
-      db.from('store_inventory').select('product_id,variant_id,stock_qty').eq('store_id', storeId),
+      db.from('store_inventory').select('store_id,product_id,variant_id,stock_qty').in('store_id', storeIds),
       db.from('product_categories').select('id,name'),
-      db.from('store_product_settings').select('product_id').eq('store_id', storeId).eq('is_available', false),
+      db.from('store_product_settings').select('store_id,product_id')
+        .in('store_id', storeIds).eq('is_available', false),
     ]);
 
   const key = (p: string, v: string | null) => `${p}:${v ?? 'base'}`;
-  const stock = new Map((inv ?? []).map((i) => [key(i.product_id, i.variant_id), Number(i.stock_qty) || 0]));
+
+  const perStore = new Map<string, Record<string, number>>();
+  const stock = new Map<string, number>();
+  for (const i of inv ?? []) {
+    const k = key(i.product_id, i.variant_id);
+    const qty = Number(i.stock_qty) || 0;
+    stock.set(k, (stock.get(k) ?? 0) + qty);
+    const row = perStore.get(k) ?? {};
+    row[i.store_id] = (row[i.store_id] ?? 0) + qty;
+    perStore.set(k, row);
+  }
+
   const catName = new Map((cats ?? []).map((c) => [c.id, c.name as string]));
-  const hidden = new Set((off ?? []).map((r) => r.product_id));
+  const offCount = new Map<string, number>();
+  for (const r of off ?? []) offCount.set(r.product_id, (offCount.get(r.product_id) ?? 0) + 1);
+  // Hidden only when every fulfilment store has switched it off.
+  const hidden = new Set(
+    [...offCount.entries()].filter(([, n]) => n >= storeIds.length).map(([id]) => id)
+  );
 
   const byProduct = new Map<string, typeof variants>();
   for (const v of variants ?? []) {
@@ -48,7 +103,9 @@ export async function fetchSellable(storeId: string, limit = 120): Promise<PosPr
     if (!children.length) {
       out.push({
         product_id: p.id, variant_id: null, display_name: p.name, sku: p.sku,
-        price: Number(p.price) || 0, stock_qty: stock.get(key(p.id, null)) ?? 0,
+        price: Number(p.price) || 0,
+        stock_qty: stock.get(key(p.id, null)) ?? 0,
+        by_store: perStore.get(key(p.id, null)) ?? {},
         category: p.category_id ? catName.get(p.category_id) ?? null : null,
       });
       continue;
@@ -60,6 +117,7 @@ export async function fetchSellable(storeId: string, limit = 120): Promise<PosPr
         sku: v.sku ?? p.sku,
         price: Number(v.price_override ?? p.price) || 0,
         stock_qty: stock.get(key(p.id, v.id)) ?? 0,
+        by_store: perStore.get(key(p.id, v.id)) ?? {},
         category: p.category_id ? catName.get(p.category_id) ?? null : null,
       });
     }

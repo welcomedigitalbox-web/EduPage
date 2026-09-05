@@ -1,7 +1,7 @@
 import { admin } from './supabase';
 import type { BotSettings, LeadStage, MsgAuthor } from './types';
 import type { KbItem } from './ai';
-import { fetchSellable } from './pos';
+import { fetchSellablePooled } from './pos';
 
 const STAGE_ORDER: LeadStage[] = [
   'new', 'engaged', 'qualified', 'negotiating', 'ordered', 'won',
@@ -23,6 +23,7 @@ export async function getSettings(): Promise<BotSettings> {
   const { data } = await admin().from('msgr_settings').select('*').eq('id', 1).single();
   return (data ?? {
     is_enabled: true, business_name: 'My Shop', default_store_id: null,
+    fulfilment_store_ids: [],
     quote_stock: true, max_kb_products: 120, language: 'my',
     persona: 'Friendly, concise Burmese shop assistant.', greeting: null,
     handoff_keywords: [], office_hours: null, min_confidence: 0.6,
@@ -44,9 +45,11 @@ export async function getKb(settings: BotSettings): Promise<KbItem[]> {
     kind: p.kind, title: p.title, body: p.body,
   }));
 
-  if (!settings.default_store_id) return items;
+  const storeIds = fulfilmentStores(settings);
+  if (!storeIds.length) return items;
 
-  const products = await fetchSellable(settings.default_store_id, settings.max_kb_products);
+  // Pooled stock: the customer does not care which shop it ships from.
+  const products = await fetchSellablePooled(storeIds, settings.max_kb_products);
   for (const p of products) {
     items.push({
       kind: 'product',
@@ -60,6 +63,13 @@ export async function getKb(settings: BotSettings): Promise<KbItem[]> {
     });
   }
   return items;
+}
+
+/** The stores the bot may quote and the dashboard may ship from. */
+export function fulfilmentStores(settings: BotSettings): string[] {
+  const ids = settings.fulfilment_store_ids ?? [];
+  if (ids.length) return ids;
+  return settings.default_store_id ? [settings.default_store_id] : [];
 }
 
 export interface Referral {

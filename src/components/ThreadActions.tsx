@@ -87,10 +87,34 @@ export function StatusButtons({
 interface PosProduct {
   product_id: string; variant_id: string | null; display_name: string;
   price: number; stock_qty: number; sku: string | null;
+  by_store: Record<string, number>;
 }
+interface Store { id: string; name: string; region: string | null }
 interface DraftLine {
   product_id: string; variant_id: string | null; product_name: string;
   qty: number; unit_price: number;
+}
+
+/** The shop in the customer's city that can actually cover the basket. */
+function autoStore(stores: Store[], address: string, lines: DraftLine[], products: PosProduct[]): string {
+  const stockFor = (l: DraftLine, storeId: string) => {
+    const p = products.find(
+      (x) => x.product_id === l.product_id && x.variant_id === l.variant_id
+    );
+    return p?.by_store?.[storeId] ?? 0;
+  };
+  const covers = (storeId: string) =>
+    lines.length > 0 && lines.every((l) => stockFor(l, storeId) >= l.qty);
+
+  const text = address.toLowerCase();
+  const inCity = stores.filter((s) => s.region && text.includes(s.region.toLowerCase()));
+  return (
+    inCity.find((s) => covers(s.id))?.id ??
+    stores.find((s) => covers(s.id))?.id ??
+    inCity[0]?.id ??
+    stores[0]?.id ??
+    ''
+  );
 }
 
 export function OrderButton({
@@ -101,11 +125,16 @@ export function OrderButton({
   labels: {
     open: string; prefilled: string; title: string; search: string; out: string;
     left: string; total: string; save: string; cancel: string; failed: string; note: string;
+    store: string; storeAuto: string; stockHere: string; stockTotal: string; notEnough: string;
   };
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [products, setProducts] = useState<PosProduct[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
+  const [storeId, setStoreId] = useState('');
+  const [address, setAddress] = useState('');
+  const [touchedStore, setTouchedStore] = useState(false);
   const [lines, setLines] = useState<DraftLine[]>(draft ?? []);
   const [search, setSearch] = useState('');
   const [err, setErr] = useState<string | null>(null);
@@ -113,26 +142,39 @@ export function OrderButton({
 
   async function openPanel() {
     setOpen(true);
-    const res = await fetch('/api/products');
+    const res = await fetch(`/api/products?contact_id=${contactId}`);
     const j = await res.json();
     setProducts(j.products ?? []);
+    setStores(j.stores ?? []);
+    setAddress(j.contact?.address ?? '');
+    setStoreId(autoStore(j.stores ?? [], j.contact?.address ?? '', draft ?? [], j.products ?? []));
+  }
+
+  // Re-route as the basket changes, until a person overrides the choice.
+  function retarget(next: DraftLine[]) {
+    if (!touchedStore) setStoreId(autoStore(stores, address, next, products));
   }
 
   function add(p: PosProduct) {
     setLines((prev) => {
       const i = prev.findIndex((l) => l.product_id === p.product_id && l.variant_id === p.variant_id);
-      if (i >= 0) {
-        const copy = [...prev];
-        copy[i] = { ...copy[i], qty: copy[i].qty + 1 };
-        return copy;
-      }
-      return [...prev, {
-        product_id: p.product_id, variant_id: p.variant_id,
-        product_name: p.display_name, qty: 1, unit_price: p.price,
-      }];
+      const next = i >= 0
+        ? prev.map((l, j) => (j === i ? { ...l, qty: l.qty + 1 } : l))
+        : [...prev, {
+            product_id: p.product_id, variant_id: p.variant_id,
+            product_name: p.display_name, qty: 1, unit_price: p.price,
+          }];
+      retarget(next);
+      return next;
     });
     setSearch('');
   }
+
+  const stockAt = (l: DraftLine) => {
+    const p = products.find((x) => x.product_id === l.product_id && x.variant_id === l.variant_id);
+    return p?.by_store?.[storeId] ?? 0;
+  };
+  const short = lines.filter((l) => stockAt(l) < l.qty);
 
   const total = lines.reduce((s, l) => s + l.qty * l.unit_price, 0);
   const matches = search
@@ -161,7 +203,9 @@ export function OrderButton({
               className="flex w-full items-center justify-between px-2 py-1.5 text-left text-xs hover:bg-edge">
               <span>{p.display_name}</span>
               <span className={p.stock_qty <= 0 ? 'text-bad' : 'text-muted'}>
-                {p.price.toLocaleString()} · {p.stock_qty <= 0 ? labels.out : `${p.stock_qty} ${labels.left}`}
+                {p.price.toLocaleString()} · {p.stock_qty <= 0
+                  ? labels.out
+                  : labels.stockTotal.replace('{n}', String(p.stock_qty))}
               </span>
             </button>
           ))}
@@ -170,15 +214,44 @@ export function OrderButton({
 
       {lines.map((l, i) => (
         <div key={i} className="flex items-center gap-2 text-xs">
-          <span className="flex-1 truncate">{l.product_name}</span>
+          <span className="flex-1 truncate">
+            {l.product_name}
+            <span className={`ml-1 ${stockAt(l) < l.qty ? 'text-bad' : 'text-muted'}`}>
+              ({labels.stockHere.replace('{n}', String(stockAt(l)))})
+            </span>
+          </span>
           <input type="number" min={1} value={l.qty}
-            onChange={(e) => setLines((p) => p.map((x, j) => j === i ? { ...x, qty: Number(e.target.value) || 1 } : x))}
+            onChange={(e) => setLines((p) => {
+              const next = p.map((x, j) => j === i ? { ...x, qty: Number(e.target.value) || 1 } : x);
+              retarget(next);
+              return next;
+            })}
             className="w-14 rounded border border-edge bg-ink px-1 py-0.5 text-right" />
           <span className="w-24 text-right tabular-nums">{(l.qty * l.unit_price).toLocaleString()}</span>
           <button className="text-muted hover:text-bad"
-            onClick={() => setLines((p) => p.filter((_, j) => j !== i))}>✕</button>
+            onClick={() => setLines((p) => {
+              const next = p.filter((_, j) => j !== i);
+              retarget(next);
+              return next;
+            })}>✕</button>
         </div>
       ))}
+
+      <div>
+        <div className="label mb-1">{labels.store}</div>
+        <select
+          className="w-full rounded-lg border border-edge bg-ink p-2 text-sm outline-none focus:border-brand"
+          value={storeId}
+          onChange={(e) => { setStoreId(e.target.value); setTouchedStore(true); }}>
+          {stores.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}{s.region ? ` · ${s.region}` : ''}
+            </option>
+          ))}
+        </select>
+        {!touchedStore && address && <p className="mt-1 text-[11px] text-muted">{labels.storeAuto}</p>}
+        {short.length > 0 && <p className="mt-1 text-[11px] text-warn">{labels.notEnough}</p>}
+      </div>
 
       <div className="flex justify-between border-t border-edge pt-2 text-sm">
         <span className="text-muted">{labels.total}</span>
@@ -191,7 +264,7 @@ export function OrderButton({
           setBusy(true); setErr(null);
           const res = await fetch('/api/orders', {
             method: 'POST', headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ contact_id: contactId, lines }),
+            body: JSON.stringify({ contact_id: contactId, lines, store_id: storeId }),
           });
           setBusy(false);
           if (!res.ok) { setErr(labels.failed); return; }

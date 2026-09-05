@@ -225,10 +225,10 @@ const D: Dict = {
   kb_preview: ['Bot က ဘာမြင်နေလဲ', 'What the bot can see'],
   kb_preview_sub: ['ဒါက bot ဆီ တကယ် ပို့နေတဲ့ အချက်အလက်ပါ။ ဒီထဲမပါတာ မေးရင် လူ့ဆီ လွှဲပါတယ်။',
                    'This is exactly what the bot is given. Anything not here gets handed to a person.'],
-  kb_products: ['ပစ္စည်း {n} မျိုး (POS ကနေ တိုက်ရိုက်)', '{n} products (live from the POS)'],
+  kb_products: ['ပစ္စည်း {n} မျိုး (ဆိုင်အားလုံး stock စုပေါင်း)', '{n} products (stock pooled across shops)'],
   kb_policies: ['စည်းကမ်း/FAQ {n} ခု', '{n} policy/FAQ entries'],
-  kb_no_store: ['Store မရွေးရသေးလို့ bot က ပစ္စည်းအကြောင်း ဘာမှ မမြင်ရပါ',
-                'No store selected, so the bot sees no products at all'],
+  kb_no_store: ['ဆိုင် မရွေးရသေးလို့ bot က ပစ္စည်းအကြောင်း ဘာမှ မမြင်ရပါ',
+                'No fulfilment shop selected, so the bot sees no products at all'],
   kb_out_of_stock: ['ကုန်နေပြီ', 'out of stock'],
   kb_show_all: ['အားလုံးကြည့်', 'Show all'],
 
@@ -258,6 +258,19 @@ const D: Dict = {
   us_pw_short: ['စကားဝှက် တိုလွန်းပါတယ်', 'Password is too short'],
   us_saved: ['သိမ်းပြီး', 'Saved'],
   us_self_note: ['ကိုယ့်ကိုယ်ကို မပိတ်နိုင်ပါ', 'You cannot disable your own account'],
+
+
+  // fulfilment
+  se_stores: ['Online order ပို့ပေးမယ့် ဆိုင်များ', 'Shops that fulfil online orders'],
+  se_stores_hint: ['Bot က ဒီဆိုင်တွေရဲ့ stock ကို စုပေါင်းပြီး ကြည့်ပါတယ်။ တစ်ဆိုင်မှာ ရှိရင် "ရှိတယ်" လို့ ဖြေမယ်။ Order တင်တဲ့အခါ ဘယ်ဆိုင်က ပို့မလဲ ရွေးရပါမယ်။',
+                   'The bot pools the stock of these shops. If any shop has it, the bot says it is available. You choose the shipping shop when you create the order.'],
+  se_default_store: ['ပုံသေ ပို့မယ့်ဆိုင် (မြို့နဲ့ မကိုက်ရင်)', 'Default shop (when no city matches)'],
+  or_store: ['ဘယ်ဆိုင်က ပို့မလဲ', 'Ship from'],
+  or_store_auto: ['ဖောက်သည့်မြို့နဲ့ ကိုက်တဲ့ဆိုင် အလိုအလျောက် ရွေးထားပါတယ်',
+                  'Auto-picked the shop matching the customer city'],
+  or_stock_here: ['ဒီဆိုင်မှာ {n}', '{n} here'],
+  or_stock_total: ['စုစုပေါင်း {n}', '{n} total'],
+  or_not_enough: ['ဒီဆိုင်မှာ stock မလုံလောက်ပါ', 'Not enough stock at this shop'],
 
   // time
   t_just_now: ['ခုနလေးတင်', 'just now'],
