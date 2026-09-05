@@ -28,7 +28,8 @@ export async function overview(since: string, until: string) {
   const db = admin();
   const { from: fromIso, to: toIso } = instants(since, until);
 
-  const [contacts, engaged, orders, spendRes, needsHuman, botHandled, pendingTasks, aiRuns] =
+  const [contacts, engaged, orders, spendRes, needsHuman, botHandled, pendingTasks, aiRuns,
+         noConvoRes] =
     await Promise.all([
       db.from('msgr_contacts').select('id', { count: 'exact', head: true })
         .gte('first_seen_at', fromIso).lte('first_seen_at', toIso),
@@ -42,6 +43,9 @@ export async function overview(since: string, until: string) {
       db.from('msgr_follow_ups').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       db.from('msgr_ai_runs').select('action')
         .gte('created_at', fromIso).lte('created_at', toIso).limit(10000),
+      // "conversation မဖြစ်သွားတဲ့သူ" — messaged once in this window, then silence
+      db.from('msgr_contacts').select('id', { count: 'exact', head: true })
+        .gte('first_seen_at', fromIso).lte('first_seen_at', toIso).eq('stage', 'new'),
     ]);
 
   const revenue = (orders.data ?? []).reduce((s, o) => s + Number(o.total), 0);
@@ -53,10 +57,7 @@ export async function overview(since: string, until: string) {
   const runs = aiRuns.data ?? [];
   const handoffs = runs.filter((r) => r.action === 'handoff').length;
 
-  // "conversation မဖြစ်သွားတဲ့သူ" — messaged once in this window, then silence
-  const { count: noConvo } = await db
-    .from('msgr_contacts').select('id', { count: 'exact', head: true })
-    .gte('first_seen_at', fromIso).lte('first_seen_at', toIso).eq('stage', 'new');
+  const noConvo = noConvoRes.count;
 
   return {
     leads,

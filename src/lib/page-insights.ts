@@ -51,6 +51,46 @@ async function metricSeries(
   return out;
 }
 
+/**
+ * Meta drops metrics between API versions and answers a request for a dead one
+ * with an empty list rather than an error, which reads as "zero" downstream.
+ * This reports what a given metric actually returns so the right name can be
+ * picked instead of guessed.
+ */
+export async function probeMetrics(
+  metrics: string[], since: string, until: string
+): Promise<Record<string, unknown>> {
+  const token = await pageToken();
+  const out: Record<string, unknown> = {};
+  for (const m of metrics) {
+    const params = new URLSearchParams({
+      metric: m, period: 'day', since, until, access_token: token,
+    });
+    try {
+      const res = await fetch(`${graph(`${env.fbPageId()}/insights`)}?${params}`);
+      const json = await res.json() as {
+        data?: { name: string; values?: unknown[] }[]; error?: { message?: string; code?: number };
+      };
+      out[m] = json.error
+        ? { error: json.error.message }
+        : { returned: (json.data ?? []).map((d) => d.name),
+            points: (json.data?.[0]?.values ?? []).length,
+            sample: (json.data?.[0]?.values ?? []).slice(-2) };
+    } catch (e) {
+      out[m] = { error: String(e) };
+    }
+  }
+  return out;
+}
+
+/** Same, for one post. */
+export async function probePostMetrics(postId: string, metrics: string[]) {
+  const token = await pageToken();
+  const params = new URLSearchParams({ metric: metrics.join(','), access_token: token });
+  const res = await fetch(`${graph(`${postId}/insights`)}?${params}`);
+  return res.json();
+}
+
 export interface PageDay {
   date: string;
   impressions: number;
