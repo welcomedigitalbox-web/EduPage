@@ -92,6 +92,8 @@ export async function runBotTurn(args: TurnArgs): Promise<{ replied: boolean; re
     handoff_reason: decision.handoff_reason,
     input_tokens: decision.usage.input_tokens,
     output_tokens: decision.usage.output_tokens,
+    cache_read_tokens: decision.usage.cache_read_tokens,
+    cache_write_tokens: decision.usage.cache_write_tokens,
     latency_ms: decision.usage.latency_ms,
   });
 

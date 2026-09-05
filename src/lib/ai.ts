@@ -43,7 +43,11 @@ export interface AiDecision {
     }[];
   };
   follow_up: { needed: boolean; hours: number | null; reason: string | null };
-  usage: { input_tokens: number; output_tokens: number; latency_ms: number; model: string };
+  usage: {
+    input_tokens: number; output_tokens: number;
+    cache_read_tokens: number; cache_write_tokens: number;
+    latency_ms: number; model: string;
+  };
 }
 
 const DECISION_TOOL: Anthropic.Tool = {
@@ -158,6 +162,11 @@ HARD RULES — breaking these costs the shop money:
 6. Keep replies to 1-3 short sentences. This is Messenger, not email. No bullet lists, no headings.
 7. Do not use emoji unless the customer used one first.
 8. Set confidence honestly. Low confidence is far better than a confident wrong answer.
+9. BURMESE WORDING — verbs get mangled easily, so use exactly these:
+   - delivering goods = "ပို့ပေးပါတယ်" / "ပို့ဆောင်ပေးပါတယ်". NEVER "သောက်ပေးပါတယ်", never "အပ်ပေးပါတယ်" for shipping.
+   - handing over at the door = "လက်ခံရရှိပါမယ်"
+   - paying = "ငွေချေပါတယ်" / "ငွေလွှဲပါတယ်"
+   Re-read your reply before returning it: every verb must be one a shop would actually say. A wrong verb makes the shop look like a bot.
 
 STAGE GUIDE:
 - new: just said hi, no product interest yet
@@ -218,10 +227,9 @@ export async function decide(opts: {
     extracted: raw.extracted ?? {},
     follow_up: raw.follow_up ?? { needed: false, hours: null, reason: null },
     usage: {
-      input_tokens:
-        res.usage.input_tokens +
-        (res.usage.cache_read_input_tokens ?? 0) +
-        (res.usage.cache_creation_input_tokens ?? 0),
+      input_tokens: res.usage.input_tokens,
+      cache_read_tokens: res.usage.cache_read_input_tokens ?? 0,
+      cache_write_tokens: res.usage.cache_creation_input_tokens ?? 0,
       output_tokens: res.usage.output_tokens,
       latency_ms: Date.now() - started,
       model,
