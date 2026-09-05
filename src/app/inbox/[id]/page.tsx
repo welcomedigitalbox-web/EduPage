@@ -55,7 +55,8 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
             return (
               <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[70%] rounded-xl px-3 py-2 text-sm ${bg}`}>
-                  {m.text ?? <span className="italic text-muted">{t('th_attachment')}</span>}
+                  <Attachments items={m.attachments as Attachment[] | null} label={t('th_attachment')} />
+                  {m.text}
                   <div className="mt-1 text-[10px] text-muted">
                     {m.author === 'bot'
                       ? t('ib_by_bot')
@@ -75,7 +76,11 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
         </div>
 
         <ReplyBox conversationId={convo.id}
-          labels={{ placeholder: t('th_reply_ph'), send: t('th_send'), hint: t('th_send_hint'), failed: t('th_send_failed') }} />
+          labels={{
+            placeholder: t('th_reply_ph'), send: t('th_send'), hint: t('th_send_hint'),
+            failed: t('th_send_failed'), attach: t('th_attach'), uploading: t('th_uploading'),
+            remove: t('th_remove'), tooLarge: t('th_too_large'),
+          }} />
       </div>
 
       <aside className="space-y-4">
@@ -134,6 +139,40 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
           </ul>
         </div>
       </aside>
+    </div>
+  );
+}
+
+interface Attachment { type?: string; payload?: { url?: string } }
+
+/** Photos and files as the customer sent them. Meta's CDN links expire after
+ *  a while, so an old picture may fail to load — the link still opens it in a
+ *  new tab while Facebook keeps it. */
+function Attachments({ items, label }: { items: Attachment[] | null; label: string }) {
+  if (!Array.isArray(items) || !items.length) return null;
+  return (
+    <div className="mb-1 space-y-1">
+      {items.map((a, i) => {
+        const url = a.payload?.url;
+        if (!url) return <span key={i} className="italic text-muted">{label}</span>;
+        if (a.type === 'image') {
+          return (
+            <a key={i} href={url} target="_blank" rel="noreferrer" className="block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="" className="max-h-64 rounded-lg object-contain" />
+            </a>
+          );
+        }
+        if (a.type === 'audio' || a.type === 'video') {
+          return a.type === 'audio'
+            ? <audio key={i} controls src={url} className="w-56" />
+            : <video key={i} controls src={url} className="max-h-64 rounded-lg" />;
+        }
+        return (
+          <a key={i} href={url} target="_blank" rel="noreferrer"
+             className="text-xs underline hover:text-brand">{a.type ?? label}</a>
+        );
+      })}
     </div>
   );
 }

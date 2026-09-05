@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { admin } from '@/lib/supabase';
-import { sendText } from '@/lib/meta';
+import { sendText, sendAttachment } from '@/lib/meta';
 import { recordMessage, closeFollowUps } from '@/lib/crm';
 import { cookies } from 'next/headers';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
@@ -11,12 +11,17 @@ export const runtime = 'nodejs';
  *  it to human_handling so the bot stops answering. */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const { text } = (await req.json()) as { text?: string };
+  const { text, attachment } = (await req.json()) as {
+    text?: string;
+    attachment?: { url: string; type: 'image' | 'video' | 'audio' | 'file'; name?: string };
+  };
 
   // Who is replying comes from the signed session, never from the request body.
   const session = await verifySession((await cookies()).get(SESSION_COOKIE)?.value);
   const agent = session?.name || session?.email || null;
-  if (!text?.trim()) return NextResponse.json({ error: 'empty message' }, { status: 400 });
+  if (!text?.trim() && !attachment?.url) {
+    return NextResponse.json({ error: 'empty message' }, { status: 400 });
+  }
 
   const db = admin();
   const { data: convo } = await db
@@ -26,15 +31,26 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const contact = convo.msgr_contacts as { id: string; psid: string };
   let mid: string | null = null;
   try {
-    const sent = await sendText(contact.psid, text);
-    mid = sent.message_id ?? null;
+    // The file goes first: a caption after the picture reads the right way
+    // round in Messenger.
+    if (attachment?.url) {
+      const sent = await sendAttachment(contact.psid, attachment.url, attachment.type);
+      mid = sent.message_id ?? null;
+    }
+    if (text?.trim()) {
+      const sent = await sendText(contact.psid, text);
+      mid = sent.message_id ?? mid;
+    }
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 502 });
   }
 
   await recordMessage({
     conversationId: id, contactId: contact.id, mid,
-    direction: 'out', author: 'human', text,
+    direction: 'out', author: 'human', text: text?.trim() || null,
+    attachments: attachment
+      ? [{ type: attachment.type, payload: { url: attachment.url } }]
+      : [],
     ai: agent ? { replied_by: agent } : null,
   });
 

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { LeadStage } from '@/lib/types';
 
@@ -7,36 +7,94 @@ export function ReplyBox({
   conversationId, labels,
 }: {
   conversationId: string;
-  labels: { placeholder: string; send: string; hint: string; failed: string };
+  labels: {
+    placeholder: string; send: string; hint: string; failed: string;
+    attach: string; uploading: string; remove: string; tooLarge: string;
+  };
 }) {
   const [text, setText] = useState('');
+  const [file, setFile] = useState<{ url: string; type: string; name: string } | null>(null);
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const fileInput = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
+  async function upload(f: File) {
+    setErr(null); setBusy(true);
+    try {
+      const body = new FormData();
+      body.append('file', f);
+      const res = await fetch('/api/upload', { method: 'POST', body });
+      const j = await res.json();
+      if (!res.ok) { setErr(j.error === 'too_large' ? labels.tooLarge : `${labels.failed}: ${j.error}`); return; }
+      setFile({ url: j.url, type: j.type, name: j.name });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** ⌘V with an image on the clipboard attaches it, the way Messenger does. */
+  function onPaste(e: React.ClipboardEvent) {
+    const item = Array.from(e.clipboardData.items).find((i) => i.kind === 'file');
+    const f = item?.getAsFile();
+    if (f) { e.preventDefault(); upload(f); }
+  }
+
   async function send() {
-    if (!text.trim()) return;
+    if (!text.trim() && !file) return;
     setErr(null);
     const res = await fetch(`/api/conversations/${conversationId}/reply`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, attachment: file }),
     });
-    if (!res.ok) { setErr(labels.failed); return; }
-    setText('');
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      setErr(`${labels.failed}${j.error ? `: ${String(j.error).slice(0, 120)}` : ''}`);
+      return;
+    }
+    setText(''); setFile(null);
     start(() => router.refresh());
   }
 
   return (
-    <div className="border-t border-edge p-3">
+    <div className="border-t border-edge p-3"
+         onDragOver={(e) => e.preventDefault()}
+         onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) upload(f); }}>
+      {file && (
+        <div className="mb-2 flex items-center gap-2 rounded-lg border border-edge bg-ink p-2">
+          {file.type === 'image' ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={file.url} alt="" className="h-14 w-14 rounded object-cover" />
+          ) : (
+            <span className="rounded bg-edge px-2 py-1 text-[10px] uppercase">{file.type}</span>
+          )}
+          <span className="flex-1 truncate text-xs text-muted">{file.name}</span>
+          <button className="btn text-xs" onClick={() => setFile(null)}>{labels.remove}</button>
+        </div>
+      )}
+
       <textarea
         value={text} onChange={(e) => setText(e.target.value)} rows={2}
         placeholder={labels.placeholder}
+        onPaste={onPaste}
         className="w-full resize-none rounded-lg border border-edge bg-ink p-2 text-sm outline-none focus:border-brand"
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }}
       />
-      <div className="mt-2 flex items-center justify-between">
-        <span className="text-xs text-muted">{err ?? labels.hint}</span>
-        <button className="btn-primary" onClick={send} disabled={pending || !text.trim()}>{labels.send}</button>
+
+      <input ref={fileInput} type="file" className="hidden"
+        accept="image/*,video/*,audio/*,application/pdf"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
+
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="flex-1 truncate text-xs text-muted">
+          {err ?? (busy ? labels.uploading : labels.hint)}
+        </span>
+        <button className="btn text-xs" disabled={busy} onClick={() => fileInput.current?.click()}>
+          {labels.attach}
+        </button>
+        <button className="btn-primary" onClick={send}
+          disabled={pending || busy || (!text.trim() && !file)}>{labels.send}</button>
       </div>
     </div>
   );

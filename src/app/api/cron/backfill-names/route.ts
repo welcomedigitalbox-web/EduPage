@@ -28,14 +28,19 @@ export async function GET(req: NextRequest) {
     .order('last_inbound_at', { ascending: false, nullsFirst: false })
     .limit(limit);
 
+  // One profile call at a time made 100 contacts overrun the function's time
+  // limit. Ten at a time is well inside Meta's rate limits and finishes fast.
   let filled = 0;
   const errors: string[] = [];
-  for (const c of contacts ?? []) {
-    const p = await fetchProfile(c.psid);
-    if (!p?.name) { errors.push(c.psid); continue; }
-    await db.from('msgr_contacts')
-      .update({ name: p.name, profile_pic: p.profile_pic }).eq('id', c.id);
-    filled += 1;
+  const rows = contacts ?? [];
+  for (let i = 0; i < rows.length; i += 10) {
+    await Promise.all(rows.slice(i, i + 10).map(async (c) => {
+      const p = await fetchProfile(c.psid);
+      if (!p?.name) { errors.push(c.psid); return; }
+      await db.from('msgr_contacts')
+        .update({ name: p.name, profile_pic: p.profile_pic }).eq('id', c.id);
+      filled += 1;
+    }));
   }
 
   return NextResponse.json({

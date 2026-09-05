@@ -34,6 +34,29 @@ export async function sendText(psid: string, text: string, tag?: string) {
   return json as { message_id?: string; recipient_id?: string };
 }
 
+/**
+ * Send a file the customer can open in Messenger. Meta fetches the URL itself,
+ * so it must be publicly reachable — the dashboard puts uploads in a public
+ * Supabase bucket for exactly this reason.
+ */
+export async function sendAttachment(
+  psid: string, url: string, type: 'image' | 'video' | 'audio' | 'file' = 'image'
+) {
+  const body = {
+    recipient: { id: psid },
+    message: { attachment: { type, payload: { url, is_reusable: false } } },
+    messaging_type: 'RESPONSE',
+  };
+  const res = await fetch(`${graph('me/messages')}?access_token=${env.fbPageToken()}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(`Send attachment failed: ${JSON.stringify(json)}`);
+  return json as { message_id?: string };
+}
+
 export async function senderAction(psid: string, action: 'typing_on' | 'typing_off' | 'mark_seen') {
   await fetch(`${graph('me/messages')}?access_token=${env.fbPageToken()}`, {
     method: 'POST',
