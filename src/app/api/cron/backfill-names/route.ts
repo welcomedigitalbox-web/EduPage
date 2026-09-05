@@ -32,10 +32,11 @@ export async function GET(req: NextRequest) {
   // limit. Ten at a time is well inside Meta's rate limits and finishes fast.
   let filled = 0;
   const errors: string[] = [];
+  let firstError: unknown = null;
   const rows = contacts ?? [];
   for (let i = 0; i < rows.length; i += 10) {
     await Promise.all(rows.slice(i, i + 10).map(async (c) => {
-      const p = await fetchProfile(c.psid);
+      const p = await fetchProfile(c.psid, (e) => { firstError ??= e; });
       if (!p?.name) { errors.push(c.psid); return; }
       await db.from('msgr_contacts')
         .update({ name: p.name, profile_pic: p.profile_pic }).eq('id', c.id);
@@ -50,5 +51,8 @@ export async function GET(req: NextRequest) {
     failed: errors.length,
     // A couple of examples is enough to diagnose; the rest is noise.
     failed_sample: errors.slice(0, 3),
+    // Meta's own words for the first failure, so the cause does not have to be
+    // dug out of the deployment logs.
+    first_error: firstError,
   });
 }

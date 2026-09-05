@@ -70,7 +70,10 @@ export async function senderAction(psid: string, action: 'typing_on' | 'typing_o
  * serves: `locale` was retired, and requesting one dead field makes the whole
  * call fail — which is why every contact was left showing its PSID.
  */
-export async function fetchProfile(psid: string) {
+export async function fetchProfile(
+  psid: string,
+  onError?: (detail: unknown) => void
+) {
   try {
     const res = await fetch(
       `${graph(psid)}?fields=first_name,last_name,profile_pic&access_token=${env.fbPageToken()}`
@@ -81,13 +84,18 @@ export async function fetchProfile(psid: string) {
     };
     if (j.error) {
       console.error('[meta] profile failed', psid, j.error.message);
+      onError?.({ psid, ...j.error });
       return null;
     }
     const name = [j.first_name, j.last_name].filter(Boolean).join(' ') || null;
-    if (!name && !j.profile_pic) return null;
+    if (!name && !j.profile_pic) {
+      onError?.({ psid, note: 'no error, but no name either', got: Object.keys(j) });
+      return null;
+    }
     return { name, profile_pic: j.profile_pic ?? null };
   } catch (e) {
     console.error('[meta] profile threw', psid, e);
+    onError?.({ psid, threw: String(e) });
     return null;
   }
 }
