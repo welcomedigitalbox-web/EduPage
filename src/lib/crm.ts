@@ -28,7 +28,7 @@ export async function getSettings(): Promise<BotSettings> {
     persona: 'Friendly, concise Burmese shop assistant.', greeting: null,
     handoff_message: 'ဒီအကြောင်းလေးကို သေချာစစ်ပြီး admin မှ မကြာခင် ပြန်ဖြေပေးပါမယ်ရှင် 🙏',
     handoff_keywords: [], office_hours: null, min_confidence: 0.6,
-    max_bot_turns: 6, follow_up_hours: 4, ghost_hours: 48,
+    max_bot_turns: 20, follow_up_hours: 4, ghost_hours: 48,
   }) as BotSettings;
 }
 
@@ -211,11 +211,17 @@ export async function recentHistory(conversationId: string, limit = 16) {
 export function preflightHandoff(
   settings: BotSettings,
   text: string | null,
-  convo: { bot_reply_count: number },
+  convo: { bot_reply_count: number; status?: string },
   hasAttachment: boolean
 ): string | null {
   if (!settings.is_enabled) return 'bot disabled';
-  if (convo.bot_reply_count >= settings.max_bot_turns) return `bot hit ${settings.max_bot_turns}-turn limit`;
+  // The turn limit flags the thread for staff ONCE. After that the thread is
+  // already on the needs-human list, so muting the bot only leaves the
+  // customer repeating themselves into silence — keep answering what the
+  // knowledge base covers.
+  if (convo.bot_reply_count >= settings.max_bot_turns && convo.status !== 'needs_human') {
+    return `bot hit ${settings.max_bot_turns}-turn limit`;
+  }
   if (hasAttachment && !text) return 'customer sent an image (likely a payment slip or product photo)';
   const lower = (text ?? '').toLowerCase();
   const hit = settings.handoff_keywords.find((k) => k && lower.includes(k.toLowerCase()));

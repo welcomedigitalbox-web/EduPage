@@ -187,6 +187,9 @@ const D: Dict = {
                   'Body — prices and stock come from the POS, do not put them here'],
   se_kb_add_btn: ['ထည့်မယ်', 'Add'],
   se_kb_delete: ['ဖျက်', 'Delete'],
+  se_kb_edit: ['ပြင်', 'Edit'],
+  se_kb_save: ['သိမ်း', 'Save'],
+  se_kb_cancel: ['မလုပ်တော့', 'Cancel'],
   se_kb_empty: ['Knowledge base ဗလာဖြစ်နေရင် bot က ဘာမှ မဖြေဘဲ လူ့ဆီပဲ လွှဲပါလိမ့်မယ်',
                 'With an empty knowledge base the bot answers nothing and hands everything to a person'],
 

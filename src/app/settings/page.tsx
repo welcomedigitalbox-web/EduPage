@@ -63,6 +63,7 @@ export default async function Settings() {
             add: L('se_kb_add'), policy: L('se_kb_kind_policy'), faq: L('se_kb_kind_faq'),
             titlePh: L('se_kb_title_ph'), bodyPh: L('se_kb_body_ph'),
             addBtn: L('se_kb_add_btn'), del: L('se_kb_delete'), empty: L('se_kb_empty'),
+            edit: L('se_kb_edit'), save: L('se_kb_save'), cancel: L('se_kb_cancel'),
           }}
         />
       </section>

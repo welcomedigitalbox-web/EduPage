@@ -149,10 +149,21 @@ export function KbEditor({
   labels: {
     add: string; policy: string; faq: string; titlePh: string; bodyPh: string;
     addBtn: string; del: string; empty: string;
+    edit: string; save: string; cancel: string;
   };
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState({ kind: 'policy', title: '', body: '' });
+  const [editing, setEditing] = useState<null | { id: string; kind: string; title: string; body: string }>(null);
+
+  async function saveEdit() {
+    if (!editing || !editing.title || !editing.body) return;
+    await fetch('/api/kb', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(editing),
+    });
+    setEditing(null);
+    router.refresh();
+  }
 
   async function save() {
     if (!draft.title || !draft.body) return;
@@ -183,14 +194,28 @@ export function KbEditor({
 
       <div className="card divide-y divide-edge">
         {items.map((k) => (
+          editing?.id === k.id ? (
+            <div key={k.id} className="space-y-2 p-3">
+              <input className={INPUT} value={editing.title}
+                onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
+              <textarea className={INPUT} rows={4} value={editing.body}
+                onChange={(e) => setEditing({ ...editing, body: e.target.value })} />
+              <div className="flex gap-2">
+                <button className="btn-primary text-xs" onClick={saveEdit}>{labels.save}</button>
+                <button className="btn text-xs" onClick={() => setEditing(null)}>{labels.cancel}</button>
+              </div>
+            </div>
+          ) : (
           <div key={k.id} className="flex items-start justify-between gap-4 p-3">
             <div className="min-w-0">
               <div className="text-sm">
                 <span className="mr-2 rounded bg-edge px-1.5 py-0.5 text-[11px] text-muted">{k.kind}</span>
                 {k.title}
               </div>
-              <div className="mt-1 text-xs text-muted">{k.body}</div>
+              <div className="mt-1 whitespace-pre-wrap text-xs text-muted">{k.body}</div>
             </div>
+            <div className="flex shrink-0 gap-2">
+            <button className="btn text-xs" onClick={() => setEditing({ ...k })}>{labels.edit}</button>
             <button className="btn text-xs" onClick={async () => {
               await fetch('/api/kb', {
                 method: 'POST', headers: { 'content-type': 'application/json' },
@@ -198,7 +223,9 @@ export function KbEditor({
               });
               router.refresh();
             }}>{labels.del}</button>
+            </div>
           </div>
+          )
         ))}
         {!items.length && <div className="p-6 text-center text-sm text-muted">{labels.empty}</div>}
       </div>

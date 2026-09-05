@@ -191,7 +191,15 @@ export async function decide(opts: {
   const res = await client().messages.create({
     model,
     max_tokens: 1024,
-    system: systemPrompt(opts.settings, opts.kb),
+    // The product catalogue + policies are the same on every turn and dwarf
+    // the chat itself, so cache them: repeat reads bill at a fraction of the
+    // normal input price. The cache lives ~5 minutes — i.e. exactly the span
+    // of an active conversation.
+    system: [{
+      type: 'text',
+      text: systemPrompt(opts.settings, opts.kb),
+      cache_control: { type: 'ephemeral' },
+    }],
     tools: [DECISION_TOOL],
     tool_choice: { type: 'tool', name: 'respond_to_customer' },
     messages,
@@ -210,7 +218,10 @@ export async function decide(opts: {
     extracted: raw.extracted ?? {},
     follow_up: raw.follow_up ?? { needed: false, hours: null, reason: null },
     usage: {
-      input_tokens: res.usage.input_tokens,
+      input_tokens:
+        res.usage.input_tokens +
+        (res.usage.cache_read_input_tokens ?? 0) +
+        (res.usage.cache_creation_input_tokens ?? 0),
       output_tokens: res.usage.output_tokens,
       latency_ms: Date.now() - started,
       model,
