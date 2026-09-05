@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { env } from '@/lib/env';
 import { admin } from '@/lib/supabase';
-import { verifySignature, sendText, senderAction, fetchProfile } from '@/lib/meta';
-import { decide } from '@/lib/ai';
+import { verifySignature, fetchProfile } from '@/lib/meta';
 import {
-  upsertContact, getOrCreateConversation, recordMessage, getSettings, getKb,
-  recentHistory, setStage, handoffToHuman, scheduleFollowUp, closeFollowUps,
-  preflightHandoff, type Referral,
+  upsertContact, getOrCreateConversation, recordMessage,
+  closeFollowUps, type Referral,
 } from '@/lib/crm';
-import type { LeadStage } from '@/lib/types';
+import { runBotTurn } from '@/lib/bot';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -125,8 +123,6 @@ async function handleEvent(pageId: string, ev: MessagingEvent) {
   // The customer answered, so any pending "chase them" task is done.
   await closeFollowUps(contact.id);
 
-  const settings = await getSettings();
-
   // Only the CURRENT status gags the bot. Counting past human replies would
   // mute a thread forever — including when the Page's own auto-reply fires.
   if (convo.status === 'human_handling') {
@@ -142,111 +138,13 @@ async function handleEvent(pageId: string, ev: MessagingEvent) {
   // the bot. If the next question is one the bot can answer from the knowledge
   // base, answering beats leaving the customer waiting for a busy shop.
 
-  const guard = preflightHandoff(settings, text, convo, attachments.length > 0);
-  if (guard) {
-    await handoffToHuman(convo.id, guard);
-    await scheduleFollowUp({
-      contactId: contact.id, hours: 0, reason: `Bot handed off: ${guard}`, priority: 1,
-    });
-    return;
-  }
-
-  // --- Ask the model ---
-  await senderAction(psid, 'mark_seen');
-  await senderAction(psid, 'typing_on');
-
-  const history = await recentHistory(convo.id);
-  const decision = await decide({ settings, kb: await getKb(settings), history, customerName: contact.name });
-
-  await db.from('msgr_ai_runs').insert({
-    conversation_id: convo.id,
-    model: decision.usage.model,
-    intent: decision.intent,
-    confidence: decision.confidence,
-    action: decision.needs_human ? 'handoff' : 'replied',
-    handoff_reason: decision.handoff_reason,
-    input_tokens: decision.usage.input_tokens,
-    output_tokens: decision.usage.output_tokens,
-    latency_ms: decision.usage.latency_ms,
+  await runBotTurn({
+    contact: contact as never,
+    convo: { ...convo, inbound_count: convo.inbound_count + 1 } as never,
+    sentAt,
+    text,
+    hasAttachments: attachments.length > 0,
   });
-
-  // Save anything useful the model pulled out of the message.
-  const patch: Record<string, unknown> = {};
-  if (decision.extracted.phone) patch.phone = decision.extracted.phone;
-  if (decision.extracted.address) patch.address = decision.extracted.address;
-  if (decision.extracted.name && !contact.name) patch.name = decision.extracted.name;
-  if (!contact.store_id && settings.default_store_id) patch.store_id = settings.default_store_id;
-  if (Object.keys(patch).length) await db.from('msgr_contacts').update(patch).eq('id', contact.id);
-
-  // A draft basket the model assembled from live POS ids. It is NOT an order —
-  // staff review it in the dashboard and press the button that writes the sale.
-  if (decision.extracted.items?.length) {
-    await db.from('msgr_conversations')
-      .update({ needs_human_reason: 'ဖောက်သည်က မှာယူပြီ — order အတည်ပြုပေးရန်' })
-      .eq('id', convo.id);
-    await db.from('msgr_messages').insert({
-      conversation_id: convo.id, contact_id: contact.id,
-      direction: 'out', author: 'system', text: null,
-      ai: { draft_order: decision.extracted.items },
-    });
-  }
-
-  await setStage(contact.id, contact.stage as LeadStage, decision.stage, `AI: ${decision.intent}`, 'bot');
-
-  const lowConfidence = decision.confidence < settings.min_confidence;
-  const handoff = decision.needs_human || lowConfidence || !decision.reply.trim();
-  const reason = decision.needs_human
-    ? decision.handoff_reason || `AI flagged: ${decision.intent}`
-    : lowConfidence
-    ? `low confidence (${decision.confidence.toFixed(2)} < ${settings.min_confidence})`
-    : 'AI produced no reply';
-
-  if (decision.reply.trim()) {
-    try {
-      const sent = await sendText(psid, decision.reply);
-      await recordMessage({
-        conversationId: convo.id,
-        contactId: contact.id,
-        mid: sent.message_id ?? null,
-        direction: 'out',
-        author: 'bot',
-        text: decision.reply,
-        ai: {
-          intent: decision.intent,
-          confidence: decision.confidence,
-          model: decision.usage.model,
-          handoff: handoff,
-        },
-      });
-      const now = new Date().toISOString();
-      await db.from('msgr_conversations').update({
-        outbound_count: convo.outbound_count + 1,
-        bot_reply_count: convo.bot_reply_count + 1,
-        last_reply_by: 'bot',
-        last_message_at: now,
-        first_response_seconds:
-          convo.first_response_seconds ??
-          Math.round((Date.now() - new Date(sentAt).getTime()) / 1000),
-      }).eq('id', convo.id);
-      await db.from('msgr_contacts').update({ last_outbound_at: now }).eq('id', contact.id);
-    } catch (e) {
-      console.error('[webhook] send failed', e);
-      await handoffToHuman(convo.id, 'send failed — check the page token');
-    }
-  }
-
-  await senderAction(psid, 'typing_off');
-
-  if (handoff) {
-    await handoffToHuman(convo.id, reason);
-    await scheduleFollowUp({ contactId: contact.id, hours: 0, reason, priority: 1 });
-  } else if (decision.follow_up.needed) {
-    await scheduleFollowUp({
-      contactId: contact.id,
-      hours: decision.follow_up.hours ?? settings.follow_up_hours,
-      reason: decision.follow_up.reason ?? 'Customer went quiet mid-conversation',
-    });
-  }
 }
 
 /** A Page-side message we did not send ourselves — i.e. staff replied in the

@@ -36,7 +36,7 @@ export default async function Settings() {
             stores: L('se_stores'), storesHint: L('se_stores_hint'),
             defaultStore: L('se_default_store'),
             language: L('se_language'), langMy: L('se_lang_my'), langEn: L('se_lang_en'),
-            langMixed: L('se_lang_mixed'), persona: L('se_persona'), handoff: L('se_handoff'),
+            langMixed: L('se_lang_mixed'), persona: L('se_persona'), handoffMsg: L('se_handoff_msg'), handoff: L('se_handoff'),
             minConf: L('se_min_conf'), maxTurns: L('se_max_turns'),
             followupHours: L('se_followup_hours'), ghostHours: L('se_ghost_hours'),
             save: L('se_save'), saved: L('se_saved'),

@@ -171,6 +171,7 @@ const D: Dict = {
   se_lang_en: ['English', 'English'],
   se_lang_mixed: ['ဖောက်သည်သုံးတဲ့ ဘာသာအတိုင်း', 'Match the customer'],
   se_persona: ['Bot ရဲ့ စကားပြောပုံ (persona)', 'Bot persona'],
+  se_handoff_msg: ['Bot မဖြေနိုင်ရင် ပြောမယ့်စကား (ဗလာထားရင် ဘာမှမပြောပါ)', 'Message when the bot cannot answer (blank = stay silent)'],
   se_handoff: ['လူ့ဆီ ချက်ချင်းလွှဲရမယ့် စကားလုံးများ (comma ခြား)', 'Instant-handoff keywords (comma separated)'],
   se_min_conf: ['Bot အနည်းဆုံး ယုံကြည်မှု ({n})', 'Minimum bot confidence ({n})'],
   se_max_turns: ['Bot အများဆုံး ဖြေခွင့် (အကြိမ်)', 'Max bot replies per thread'],

@@ -26,6 +26,7 @@ export async function getSettings(): Promise<BotSettings> {
     fulfilment_store_ids: [],
     quote_stock: true, max_kb_products: 120, language: 'my',
     persona: 'Friendly, concise Burmese shop assistant.', greeting: null,
+    handoff_message: 'ဒီအကြောင်းလေးကို သေချာစစ်ပြီး admin မှ မကြာခင် ပြန်ဖြေပေးပါမယ်ရှင် 🙏',
     handoff_keywords: [], office_hours: null, min_confidence: 0.6,
     max_bot_turns: 6, follow_up_hours: 4, ghost_hours: 48,
   }) as BotSettings;

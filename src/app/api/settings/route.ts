@@ -5,7 +5,7 @@ export async function POST(req: NextRequest) {
   const b = await req.json();
   const allowed = [
     'is_enabled', 'business_name', 'default_store_id', 'fulfilment_store_ids', 'quote_stock',
-    'max_kb_products', 'language', 'persona', 'greeting',
+    'max_kb_products', 'language', 'persona', 'greeting', 'handoff_message',
     'handoff_keywords', 'office_hours', 'min_confidence', 'max_bot_turns',
     'follow_up_hours', 'ghost_hours',
   ];

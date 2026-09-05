@@ -10,7 +10,7 @@ export interface SettingsLabels {
   enabled: string; business: string; store: string; storeHint: string; pick: string;
   stores: string; storesHint: string; defaultStore: string;
   quoteStock: string; language: string; langMy: string; langEn: string; langMixed: string;
-  persona: string; handoff: string; minConf: string; maxTurns: string;
+  persona: string; handoffMsg: string; handoff: string; minConf: string; maxTurns: string;
   followupHours: string; ghostHours: string; save: string; saved: string;
 }
 
@@ -89,6 +89,11 @@ export function SettingsForm({
 
       <Field label={labels.persona}>
         <textarea className={INPUT} rows={2} value={s.persona} onChange={(e) => set('persona', e.target.value)} />
+      </Field>
+
+      <Field label={labels.handoffMsg}>
+        <textarea className={INPUT} rows={2} value={s.handoff_message ?? ''}
+          onChange={(e) => set('handoff_message', e.target.value)} />
       </Field>
 
       <Field label={labels.handoff}>
