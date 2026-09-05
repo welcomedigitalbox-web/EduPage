@@ -127,8 +127,9 @@ async function handleEvent(pageId: string, ev: MessagingEvent) {
 
   const settings = await getSettings();
 
-  // A human who has actually replied owns the thread — never talk over them.
-  if (convo.status === 'human_handling' || convo.human_reply_count > 0) {
+  // Only the CURRENT status gags the bot. Counting past human replies would
+  // mute a thread forever — including when the Page's own auto-reply fires.
+  if (convo.status === 'human_handling') {
     await db.from('msgr_conversations').update({
       status: 'needs_human',
       needs_human_since: convo.needs_human_since ?? sentAt,
