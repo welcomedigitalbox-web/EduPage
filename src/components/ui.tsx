@@ -2,14 +2,34 @@ import Link from 'next/link';
 import type { LeadStage } from '@/lib/types';
 
 export function Stat({
-  label, value, sub, tone,
-}: { label: string; value: string; sub?: string; tone?: 'good' | 'warn' | 'bad' }) {
+  label, value, sub, tone, delta, deltaGood = 'up', prev,
+}: {
+  label: string; value: string; sub?: string; tone?: 'good' | 'warn' | 'bad';
+  /** Percent change against the previous period; null means "no basis". */
+  delta?: number | null;
+  /** Which direction is good — cost metrics want 'down'. */
+  deltaGood?: 'up' | 'down';
+  /** The previous period's value, shown beside the badge. */
+  prev?: string;
+}) {
   const color = tone === 'good' ? 'text-good' : tone === 'warn' ? 'text-warn' : tone === 'bad' ? 'text-bad' : '';
+  const up = (delta ?? 0) > 0;
+  const flat = delta === 0 || delta == null;
+  const good = deltaGood === 'up' ? up : !up;
+  const deltaColor = flat ? 'text-muted' : good ? 'text-good' : 'text-bad';
   return (
     <div className="card p-4">
       <div className="label">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${color}`}>{value}</div>
+      <div className="mt-1 flex items-baseline gap-2">
+        <div className={`text-2xl font-semibold tabular-nums ${color}`}>{value}</div>
+        {delta != null && (
+          <span className={`text-xs tabular-nums ${deltaColor}`}>
+            {up ? '▲' : delta < 0 ? '▼' : ''}{Math.abs(delta).toFixed(0)}%
+          </span>
+        )}
+      </div>
       {sub && <div className="mt-1 text-xs text-muted">{sub}</div>}
+      {prev && <div className="mt-0.5 text-[11px] text-muted">{prev}</div>}
     </div>
   );
 }

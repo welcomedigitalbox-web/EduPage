@@ -1,5 +1,7 @@
 import { overview, dailyFunnel, stageCounts } from '@/lib/queries';
 import { getSettings } from '@/lib/crm';
+import { resolveRange, delta } from '@/lib/range';
+import { RangePicker } from '@/components/RangePicker';
 import { Stat, BarChart, Funnel, money, num } from '@/components/ui';
 import { ctx } from '@/lib/server-ctx';
 import Link from 'next/link';
@@ -8,47 +10,70 @@ export const dynamic = 'force-dynamic';
 
 export default async function Overview({
   searchParams,
-}: { searchParams: Promise<{ days?: string }> }) {
+}: {
+  searchParams: Promise<{
+    days?: string; preset?: string; since?: string; until?: string; compare?: string;
+  }>;
+}) {
   const { t } = await ctx();
   const sp = await searchParams;
-  const days = Number(sp.days ?? 30);
+  const r = resolveRange(sp);
+  const days = r.days;
 
   const settings = await getSettings();
   const cur = settings.ad_currency || 'USD';
-  const [o, daily, stages] = await Promise.all([
-    overview(days), dailyFunnel(days), stageCounts(days),
+  const [o, prev, daily, stages] = await Promise.all([
+    overview(r.since, r.until),
+    r.compare ? overview(r.prevSince, r.prevUntil) : Promise.resolve(null),
+    dailyFunnel(r.since, r.until),
+    stageCounts(r.since, r.until),
   ]);
+
+  // Only show a delta when there is a previous period to compare against.
+  const d = (pick: (x: NonNullable<typeof prev>) => number | null) =>
+    prev ? delta(Number(pick(o) ?? 0), Number(pick(prev) ?? 0)) : undefined;
 
   const short = (d: string) => d.slice(5);
 
   return (
     <div className="space-y-6">
-      <header className="flex items-end justify-between">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">{t('ov_title')}</h1>
-          <p className="text-sm text-muted">{t('ov_last_days', { n: days })}</p>
+          <p className="text-sm text-muted">
+            {r.since === r.until ? r.since : `${r.since} → ${r.until}`}
+            {prev && ` · ${t('rg_vs', { a: r.prevSince, b: r.prevUntil })}`}
+          </p>
         </div>
-        <div className="flex gap-2">
-          {[7, 30, 90].map((d) => (
-            <Link key={d} href={`/?days=${d}`}
-              className={`btn ${d === days ? 'border-brand text-brand' : ''}`}>
-              {t('ov_days', { n: d })}
-            </Link>
-          ))}
-        </div>
+        <RangePicker
+          preset={r.preset} since={r.since} until={r.until} compare={r.compare}
+          labels={{
+            today: t('rg_today'), yesterday: t('rg_yesterday'), d7: t('rg_7d'),
+            d30: t('rg_30d'), d90: t('rg_90d'), month: t('rg_month'),
+            lastMonth: t('rg_last_month'), custom: t('rg_custom'), apply: t('rg_apply'),
+            compare: t('rg_compare'), from: t('rg_from'), to: t('rg_to'),
+          }}
+        />
       </header>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label={t('ov_leads')} value={num(o.leads)} sub={t('ov_leads_sub')} />
-        <Stat label={t('ov_engaged')} value={num(o.engaged)} sub={t('ov_engaged_sub')} />
-        <Stat label={t('ov_noconvo')} value={num(o.noConvo)} tone="warn" sub={t('ov_noconvo_sub')} />
+        <Stat label={t('ov_leads')} value={num(o.leads)} sub={t('ov_leads_sub')}
+              delta={d((x) => x.leads)} />
+        <Stat label={t('ov_engaged')} value={num(o.engaged)} sub={t('ov_engaged_sub')}
+              delta={d((x) => x.engaged)} />
+        <Stat label={t('ov_noconvo')} value={num(o.noConvo)} tone="warn" sub={t('ov_noconvo_sub')}
+              delta={d((x) => x.noConvo)} deltaGood="down" />
         <Stat label={t('ov_won')} value={num(o.orders)} tone="good"
-              sub={o.convRate != null ? t('ov_conv_rate', { n: o.convRate.toFixed(1) }) : undefined} />
+              sub={o.convRate != null ? t('ov_conv_rate', { n: o.convRate.toFixed(1) }) : undefined}
+              delta={d((x) => x.orders)} />
       </section>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label={t('ov_spend')} value={money(o.spend, cur)} />
-        <Stat label={t('ov_cpl')} value={money(o.costPerLead, cur, 2)} />
+        <Stat label={t('ov_spend')} value={money(o.spend, cur)} delta={d((x) => x.spend)}
+              deltaGood="down" prev={prev ? t('rg_prev', { v: money(prev.spend, cur) }) : undefined} />
+        <Stat label={t('ov_cpl')} value={money(o.costPerLead, cur, 2)}
+              delta={d((x) => x.costPerLead)} deltaGood="down"
+              prev={prev ? t('rg_prev', { v: money(prev.costPerLead, cur, 2) }) : undefined} />
         <Stat label={t('ov_cpa')} value={money(o.costPerOrder, cur, 2)}
               tone={o.costPerOrder && o.revenue / Math.max(o.orders, 1) < o.costPerOrder ? 'bad' : undefined} />
         <Stat label={t('ov_roas')} value={o.roas != null ? `${o.roas.toFixed(2)}x` : '—'}

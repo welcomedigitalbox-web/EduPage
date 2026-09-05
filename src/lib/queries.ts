@@ -1,4 +1,5 @@
 import { admin } from './supabase';
+import { instants } from './range';
 
 export interface DailyRow {
   day: string; new_contacts: number; engaged_contacts: number;
@@ -6,38 +7,41 @@ export interface DailyRow {
   revenue_usd: number; spend: number;
 }
 
-export async function dailyFunnel(days = 30): Promise<DailyRow[]> {
-  const from = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
+export async function dailyFunnel(since: string, until: string): Promise<DailyRow[]> {
   const { data } = await admin()
-    .from('v_msgr_daily').select('*').gte('day', from).order('day');
+    .from('v_msgr_daily').select('*').gte('day', since).lte('day', until).order('day');
   return (data ?? []) as DailyRow[];
 }
 
-export async function stageCounts(days = 30) {
-  const from = new Date(Date.now() - days * 86400_000).toISOString();
+export async function stageCounts(since: string, until: string) {
+  const { from, to } = instants(since, until);
   const { data } = await admin()
-    .from('msgr_contacts').select('stage').gte('first_seen_at', from).limit(10000);
+    .from('msgr_contacts').select('stage')
+    .gte('first_seen_at', from).lte('first_seen_at', to).limit(10000);
   const counts: Record<string, number> = {};
   for (const r of data ?? []) counts[r.stage] = (counts[r.stage] ?? 0) + 1;
   return counts;
 }
 
 /** The headline numbers. Every one of these maps to a question Kay asked. */
-export async function overview(days = 30) {
+export async function overview(since: string, until: string) {
   const db = admin();
-  const fromIso = new Date(Date.now() - days * 86400_000).toISOString();
-  const fromDay = fromIso.slice(0, 10);
+  const { from: fromIso, to: toIso } = instants(since, until);
 
   const [contacts, engaged, orders, spendRes, needsHuman, botHandled, pendingTasks, aiRuns] =
     await Promise.all([
-      db.from('msgr_contacts').select('id', { count: 'exact', head: true }).gte('first_seen_at', fromIso),
-      db.from('msgr_conversations').select('id', { count: 'exact', head: true }).gt('inbound_count', 1),
-      db.from('v_msgr_sales').select('total,total_usd').gte('created_at', fromIso),
-      db.from('msgr_ad_daily').select('spend').gte('date', fromDay),
+      db.from('msgr_contacts').select('id', { count: 'exact', head: true })
+        .gte('first_seen_at', fromIso).lte('first_seen_at', toIso),
+      db.from('msgr_contacts').select('id', { count: 'exact', head: true })
+        .gte('first_seen_at', fromIso).lte('first_seen_at', toIso).neq('stage', 'new'),
+      db.from('v_msgr_sales').select('total,total_usd')
+        .gte('created_at', fromIso).lte('created_at', toIso),
+      db.from('msgr_ad_daily').select('spend').gte('date', since).lte('date', until),
       db.from('msgr_conversations').select('id', { count: 'exact', head: true }).eq('status', 'needs_human'),
       db.from('msgr_conversations').select('id', { count: 'exact', head: true }).eq('last_reply_by', 'bot'),
       db.from('msgr_follow_ups').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-      db.from('msgr_ai_runs').select('action').gte('created_at', fromIso).limit(10000),
+      db.from('msgr_ai_runs').select('action')
+        .gte('created_at', fromIso).lte('created_at', toIso).limit(10000),
     ]);
 
   const revenue = (orders.data ?? []).reduce((s, o) => s + Number(o.total), 0);
@@ -49,9 +53,10 @@ export async function overview(days = 30) {
   const runs = aiRuns.data ?? [];
   const handoffs = runs.filter((r) => r.action === 'handoff').length;
 
-  // "conversation မဖြစ်သွားတဲ့သူ" — messaged once, never became a real exchange
+  // "conversation မဖြစ်သွားတဲ့သူ" — messaged once in this window, then silence
   const { count: noConvo } = await db
-    .from('msgr_conversations').select('id', { count: 'exact', head: true }).lte('inbound_count', 1);
+    .from('msgr_contacts').select('id', { count: 'exact', head: true })
+    .gte('first_seen_at', fromIso).lte('first_seen_at', toIso).eq('stage', 'new');
 
   return {
     leads,
@@ -198,4 +203,100 @@ export async function allTags(): Promise<string[]> {
   const set = new Set<string>();
   for (const r of data ?? []) for (const t of (r.tags ?? []) as string[]) if (t) set.add(t);
   return [...set].sort();
+}
+
+// ---------------- Online sales report ----------------
+
+export interface SalesReport {
+  orders: number;
+  revenue: number;
+  revenueUsd: number;
+  aov: number | null;
+  byStatus: { status: string; orders: number; revenue: number }[];
+  byStore: { store_id: string; store_name: string; orders: number; revenue: number }[];
+  byDay: { day: string; orders: number; revenue: number }[];
+  topProducts: { name: string; qty: number; revenue: number }[];
+  fromAds: { orders: number; revenue: number };
+}
+
+/**
+ * Everything the shop sold through Messenger in a window. Cancelled orders are
+ * already excluded by v_msgr_sales, so these are real sales, not attempts.
+ */
+export async function salesReport(since: string, until: string): Promise<SalesReport> {
+  const db = admin();
+  const { from, to } = instants(since, until);
+
+  const { data: sales } = await db
+    .from('v_msgr_sales')
+    .select('sale_id,total,total_usd,order_status,store_id,created_at,ad_id')
+    .gte('created_at', from).lte('created_at', to)
+    .limit(5000);
+  const rows = sales ?? [];
+
+  const revenue = rows.reduce((a, r) => a + Number(r.total || 0), 0);
+  const revenueUsd = rows.reduce((a, r) => a + Number(r.total_usd || 0), 0);
+
+  const group = <T extends string>(key: (r: (typeof rows)[number]) => T) => {
+    const m = new Map<T, { orders: number; revenue: number }>();
+    for (const r of rows) {
+      const k = key(r);
+      const cur = m.get(k) ?? { orders: 0, revenue: 0 };
+      cur.orders += 1;
+      cur.revenue += Number(r.total || 0);
+      m.set(k, cur);
+    }
+    return m;
+  };
+
+  const statusMap = group((r) => String(r.order_status ?? 'unknown'));
+  const storeMap = group((r) => String(r.store_id ?? '—'));
+  const dayMap = group((r) =>
+    new Date(r.created_at as string).toLocaleDateString('en-CA', { timeZone: 'Asia/Yangon' })
+  );
+
+  // Store names live in the POS, not in the view.
+  const storeIds = [...storeMap.keys()].filter((s) => s !== '—');
+  const { data: stores } = storeIds.length
+    ? await db.from('stores').select('id,name').in('id', storeIds)
+    : { data: [] as { id: string; name: string }[] };
+  const storeName = new Map((stores ?? []).map((s) => [s.id, s.name]));
+
+  // Line items for the same sales, for the best-seller table.
+  const saleIds = rows.map((r) => r.sale_id as string);
+  const items: { product_name: string; qty: number; line_total: number }[] = [];
+  for (let i = 0; i < saleIds.length; i += 200) {
+    const { data } = await db.from('sale_items')
+      .select('product_name,qty,line_total').in('sale_id', saleIds.slice(i, i + 200));
+    items.push(...((data ?? []) as typeof items));
+  }
+  const prodMap = new Map<string, { qty: number; revenue: number }>();
+  for (const it of items) {
+    const k = it.product_name || '—';
+    const cur = prodMap.get(k) ?? { qty: 0, revenue: 0 };
+    cur.qty += Number(it.qty || 0);
+    cur.revenue += Number(it.line_total || 0);
+    prodMap.set(k, cur);
+  }
+
+  const adRows = rows.filter((r) => r.ad_id);
+
+  return {
+    orders: rows.length,
+    revenue,
+    revenueUsd,
+    aov: rows.length ? revenue / rows.length : null,
+    byStatus: [...statusMap].map(([status, v]) => ({ status, ...v }))
+      .sort((a, b) => b.revenue - a.revenue),
+    byStore: [...storeMap].map(([store_id, v]) => ({
+      store_id, store_name: storeName.get(store_id) ?? store_id, ...v,
+    })).sort((a, b) => b.revenue - a.revenue),
+    byDay: [...dayMap].map(([day, v]) => ({ day, ...v })).sort((a, b) => a.day.localeCompare(b.day)),
+    topProducts: [...prodMap].map(([name, v]) => ({ name, ...v }))
+      .sort((a, b) => b.revenue - a.revenue).slice(0, 20),
+    fromAds: {
+      orders: adRows.length,
+      revenue: adRows.reduce((a, r) => a + Number(r.total || 0), 0),
+    },
+  };
 }
