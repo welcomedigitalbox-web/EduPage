@@ -159,7 +159,10 @@ export async function runBotTurn(args: TurnArgs): Promise<{ replied: boolean; re
       replied = true;
     } catch (e) {
       console.error('[bot] send failed', e);
-      await handoffToHuman(convo.id, 'send failed — check the page token');
+      // Keep Meta's own words on the thread: "check the page token" was a guess
+      // that sent us hunting the wrong problem for days.
+      const detail = String((e as Error)?.message ?? e).replace(/\s+/g, ' ').slice(0, 300);
+      await handoffToHuman(convo.id, `send failed — ${detail}`);
       await senderAction(contact.psid, 'typing_off');
       return { replied: false, reason: 'send failed' };
     }

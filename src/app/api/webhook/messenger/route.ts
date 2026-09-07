@@ -73,6 +73,13 @@ interface MessagingEvent {
   delivery?: unknown;
 }
 
+/** Meta sends milliseconds on message events but seconds on some others.
+ *  Treating seconds as milliseconds lands the message in January 1970. */
+function eventTime(ts?: number): string {
+  if (!ts) return new Date().toISOString();
+  return new Date(ts < 1e12 ? ts * 1000 : ts).toISOString();
+}
+
 async function handleEvent(pageId: string, ev: MessagingEvent) {
   if (ev.read || ev.delivery) return;
 
@@ -96,7 +103,7 @@ async function handleEvent(pageId: string, ev: MessagingEvent) {
 
   const text = ev.message?.text ?? ev.postback?.title ?? null;
   const attachments = ev.message?.attachments ?? [];
-  const sentAt = ev.timestamp ? new Date(ev.timestamp).toISOString() : new Date().toISOString();
+  const sentAt = eventTime(ev.timestamp);
 
   const isNew = await recordMessage({
     conversationId: convo.id,
