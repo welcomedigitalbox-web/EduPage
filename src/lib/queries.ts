@@ -41,7 +41,7 @@ export async function overview(since: string, until: string) {
         .gte('msgr_contacts.first_seen_at', fromIso)
         .lte('msgr_contacts.first_seen_at', toIso)
         .limit(20000),
-      db.from('v_msgr_sales').select('total,total_usd')
+      db.from('v_msgr_sales').select('contact_id,total,total_usd')
         .gte('created_at', fromIso).lte('created_at', toIso),
       db.from('msgr_ad_daily').select('spend').gte('date', since).lte('date', until),
       db.from('msgr_conversations').select('id', { count: 'exact', head: true }).eq('status', 'needs_human'),
@@ -56,6 +56,12 @@ export async function overview(since: string, until: string) {
   const revenueUsd = (orders.data ?? []).reduce((s, o) => s + Number(o.total_usd ?? 0), 0);
   const spend = (spendRes.data ?? []).reduce((s, r) => s + Number(r.spend), 0);
   const orderCount = orders.data?.length ?? 0;
+  // People, not receipts. One customer placing three orders is one buyer, and
+  // the tile that says "customers who bought" has to agree with the list it
+  // opens — which is a list of people.
+  const buyers = new Set(
+    (orders.data ?? []).map((o) => o.contact_id).filter(Boolean) as string[]
+  ).size;
   const leads = contacts.count ?? 0;
   const runs = aiRuns.data ?? [];
   const handoffs = runs.filter((r) => r.action === 'handoff').length;
@@ -71,6 +77,7 @@ export async function overview(since: string, until: string) {
     engaged: engagedCount,
     noConvo,
     orders: orderCount,
+    buyers,
     revenue,
     spend,
     costPerLead: leads ? spend / leads : null,
@@ -79,7 +86,7 @@ export async function overview(since: string, until: string) {
     // Spend is billed in USD; revenue_usd was converted per sale at that day's
     // rate, so the two sides of this ratio are finally the same currency.
     roas: spend ? revenueUsd / spend : null,
-    convRate: leads ? (orderCount / leads) * 100 : null,
+    convRate: leads ? (buyers / leads) * 100 : null,
     needsHuman: needsHuman.count ?? 0,
     botHandled: botHandled.count ?? 0,
     pendingTasks: pendingTasks.count ?? 0,
@@ -188,8 +195,22 @@ export async function customerList(opts: {
 
   if (opts.segment && opts.since && opts.until) {
     const { from, to } = instants(opts.since, opts.until);
-    query = query.gte('first_seen_at', from).lte('first_seen_at', to);
-    if (opts.segment === 'won') query = query.eq('stage', 'won');
+
+    if (opts.segment === 'won') {
+      // A buyer is someone with a sale dated inside the window — not someone
+      // whose *stage* says won, and not someone who first wrote to us inside
+      // the window. Those are three different sets, and the dashboard counts
+      // this one.
+      const { data: sold } = await db.from('v_msgr_sales')
+        .select('contact_id').gte('created_at', from).lte('created_at', to).limit(20000);
+      const ids = [...new Set(
+        (sold ?? []).map((r) => r.contact_id).filter(Boolean) as string[]
+      )];
+      if (!ids.length) return [];
+      query = query.in('id', ids.slice(0, 1000));
+    } else {
+      query = query.gte('first_seen_at', from).lte('first_seen_at', to);
+    }
 
     // "Engaged" and "never a conversation" are counted from how many messages
     // the customer sent, exactly as the overview tile counts them — so pull
