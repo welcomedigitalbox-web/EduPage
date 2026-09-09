@@ -18,6 +18,8 @@ export function orderFormLabels(
     codDue: t('or2_cod_due'), fixFirst: t('or2_fix_first'),
     channel: t('or2_channel'), pickChannel: t('or2_pick_channel'),
     payRef: t('or2_pay_ref'), payRefPh: t('or2_pay_ref_ph'),
+    slip: t('or2_slip'), slipAdd: t('or2_slip_add'), slipView: t('or2_slip_view'),
+    slipRemove: t('or2_slip_remove'), uploading: t('or2_uploading'),
     deliveryMethod: t('or2_delivery_method'), deliveryPh: t('or2_delivery_ph'),
     orderDate: t('or2_order_date'), status: t('or2_status'), note: t('or2_note'),
     notePh: t('or2_note_ph'), save: t('or2_save'), saving: t('or2_saving'),

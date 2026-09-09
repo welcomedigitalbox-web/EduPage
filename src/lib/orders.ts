@@ -23,6 +23,7 @@ export interface OrderInput {
   payment_method?: string;
   payment_channel_id?: string | null;
   payment_ref?: string | null;
+  payment_slip_url?: string | null;
   advance_payment?: number;
   delivery_fee?: number;
   discount?: number;
@@ -85,6 +86,7 @@ export async function saveOrder(
     payment_method: input.payment_method || 'cod',
     payment_channel_id: input.payment_channel_id || null,
     payment_ref: input.payment_ref?.trim() || null,
+    payment_slip_url: input.payment_slip_url?.trim() || null,
     advance_payment: Number(input.advance_payment || 0),
     delivery_fee: Number(input.delivery_fee || 0),
     discount: Number(input.discount || 0),

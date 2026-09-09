@@ -22,6 +22,7 @@ export interface OrderFormLabels {
   payment: string; cod: string; deposit: string; transfer: string; advance: string;
   codDue: string; fixFirst: string; channel: string; pickChannel: string;
   payRef: string; payRefPh: string;
+  slip: string; slipAdd: string; slipView: string; slipRemove: string; uploading: string;
   deliveryMethod: string; deliveryPh: string; orderDate: string; status: string;
   note: string; notePh: string; save: string; saving: string; failed: string;
   errors: Record<string, string>;
@@ -36,7 +37,8 @@ export function OrderForm({
   initial: Partial<{
     customer_name: string; phone: string; city: string; delivery_address: string;
     shop_id: string; order_date: string; delivery_method: string; payment_method: string;
-    payment_channel_id: string; payment_ref: string; advance_payment: number; delivery_fee: number; discount: number; status: string;
+    payment_channel_id: string; payment_ref: string; payment_slip_url: string;
+    advance_payment: number; delivery_fee: number; discount: number; status: string;
     note: string; items: Line[];
   }>;
   contactId?: string | null;
@@ -58,6 +60,7 @@ export function OrderForm({
     payment_method: initial.payment_method ?? 'cod',
     payment_channel_id: initial.payment_channel_id ?? '',
     payment_ref: initial.payment_ref ?? '',
+    payment_slip_url: initial.payment_slip_url ?? '',
     advance_payment: initial.advance_payment ?? 0,
     delivery_fee: initial.delivery_fee ?? 0,
     discount: initial.discount ?? 0,
@@ -74,6 +77,7 @@ export function OrderForm({
   // Errors stay hidden until the first save attempt: flagging an empty form
   // the moment it opens is noise, not help.
   const [touched, setTouched] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) =>
     setF((p) => ({ ...p, [k]: v }));
@@ -107,11 +111,24 @@ export function OrderForm({
         // COD takes no money up front, so a wallet on the order would be a lie.
         payment_channel_id: advance > 0 ? p.payment_channel_id : '',
         payment_ref: advance > 0 ? p.payment_ref : '',
+        payment_slip_url: advance > 0 ? p.payment_slip_url : '',
       };
     });
   }
 
   const advanceLocked = f.payment_method !== 'deposit';
+
+  /** The slip goes to the same store the inbox uses for its attachments, so
+   *  there is one place to look for customer-supplied images. */
+  async function uploadSlip(file: File) {
+    setUploading(true);
+    const body = new FormData();
+    body.append('file', file);
+    const res = await fetch('/api/upload', { method: 'POST', body });
+    const j = await res.json().catch(() => ({}));
+    setUploading(false);
+    if (res.ok && j.url) set('payment_slip_url', j.url as string);
+  }
 
   async function save() {
     setTouched(true);
@@ -290,6 +307,32 @@ export function OrderForm({
                 <input className={INPUT} placeholder={labels.payRefPh} value={f.payment_ref}
                   onChange={(e) => set('payment_ref', e.target.value)} />
               </Field>
+              <div className="col-span-2">
+                <span className="mb-1 block text-[11px] text-muted">{labels.slip}</span>
+                {f.payment_slip_url ? (
+                  <div className="flex items-center gap-2">
+                    <a href={f.payment_slip_url} target="_blank" rel="noreferrer"
+                       className="block h-16 w-16 overflow-hidden rounded-lg border border-edge">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={f.payment_slip_url} alt={labels.slip}
+                           className="h-full w-full object-cover" />
+                    </a>
+                    <a className="btn text-xs" href={f.payment_slip_url}
+                       target="_blank" rel="noreferrer">{labels.slipView}</a>
+                    <button className="btn text-xs"
+                      onClick={() => set('payment_slip_url', '')}>{labels.slipRemove}</button>
+                  </div>
+                ) : (
+                  <label className="btn inline-block cursor-pointer text-xs">
+                    {uploading ? labels.uploading : labels.slipAdd}
+                    <input type="file" accept="image/*" className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) uploadSlip(file);
+                      }} />
+                  </label>
+                )}
+              </div>
             </div>
           )}
 
