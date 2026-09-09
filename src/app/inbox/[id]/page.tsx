@@ -1,7 +1,8 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { conversationDetail } from '@/lib/queries';
 import { StageBadge, HandlerBadge, ago } from '@/components/ui';
-import { ReplyBox, StagePicker, StatusButtons, OrderButton, PosCustomerBox } from '@/components/ThreadActions';
+import { ReplyBox, StagePicker, StatusButtons, PosCustomerBox } from '@/components/ThreadActions';
 import { ctx } from '@/lib/server-ctx';
 import { STAGE_KEY } from '@/lib/i18n';
 import type { LeadStage } from '@/lib/types';
@@ -115,16 +116,11 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
           }}
         />
 
-        <OrderButton contactId={c.id} draft={draftOrder} labels={{
-          open: t('or_open'), prefilled: t('or_prefilled', { n: draftOrder?.length ?? 0 }),
-          title: t('or_title'), search: t('or_search'), out: t('or_out_of_stock'),
-          left: t('or_in_stock', { n: '' }), total: t('or_total'), save: t('or_save'),
-          cancel: t('or_cancel'), failed: t('or_failed'), note: t('or_note'),
-          store: t('or_store'), storeAuto: t('or_store_auto'),
-          stockHere: t('or_stock_here', { n: '{n}' }),
-          stockTotal: t('or_stock_total', { n: '{n}' }),
-          notEnough: t('or_not_enough'),
-        }} />
+        <Link
+          href={`/orders/new?contact=${c.id}&convo=${convo.id}`}
+          className="btn-primary block p-3 text-center text-sm">
+          {t('or2_new')}
+        </Link>
 
         <div className="card p-3">
           <div className="label mb-2">{t('th_history')}</div>

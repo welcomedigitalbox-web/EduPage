@@ -21,6 +21,7 @@ const NAV = [
   { href: '/inbox', key: 'nav_inbox', managerOnly: false },
   { href: '/customers', key: 'nav_customers', managerOnly: false },
   { href: '/followups', key: 'nav_followups', managerOnly: false },
+  { href: '/orders', key: 'nav_orders', managerOnly: false },
   { href: '/ask', key: 'nav_ask', managerOnly: true },
   { href: '/reports', key: 'nav_reports', managerOnly: true },
   { href: '/ads', key: 'nav_ads', managerOnly: true },

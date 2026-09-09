@@ -310,20 +310,21 @@ export async function salesReport(since: string, until: string): Promise<SalesRe
     new Date(r.created_at as string).toLocaleDateString('en-CA', { timeZone: 'Asia/Yangon' })
   );
 
-  // Store names live in the POS, not in the view.
+  // Shop names come from the online-order shop list.
   const storeIds = [...storeMap.keys()].filter((s) => s !== '—');
   const { data: stores } = storeIds.length
-    ? await db.from('stores').select('id,name').in('id', storeIds)
+    ? await db.from('msgr_shops').select('id,name').in('id', storeIds)
     : { data: [] as { id: string; name: string }[] };
   const storeName = new Map((stores ?? []).map((s) => [s.id, s.name]));
 
-  // Line items for the same sales, for the best-seller table.
+  // Line items for the same orders, for the best-seller table.
   const saleIds = rows.map((r) => r.sale_id as string);
   const items: { product_name: string; qty: number; line_total: number }[] = [];
   for (let i = 0; i < saleIds.length; i += 200) {
-    const { data } = await db.from('sale_items')
-      .select('product_name,qty,line_total').in('sale_id', saleIds.slice(i, i + 200));
-    items.push(...((data ?? []) as typeof items));
+    const { data } = await db.from('msgr_order_items')
+      .select('description,qty,line_total').in('order_id', saleIds.slice(i, i + 200));
+    items.push(...((data ?? []) as { description: string; qty: number; line_total: number }[])
+      .map((d) => ({ product_name: d.description, qty: d.qty, line_total: d.line_total })));
   }
   const prodMap = new Map<string, { qty: number; revenue: number }>();
   for (const it of items) {
