@@ -7,6 +7,7 @@ import { UserManager } from '@/components/Users';
 import { FxRates } from '@/components/FxRates';
 import { PaymentChannels } from '@/components/PaymentChannels';
 import { ReceiptSettings } from '@/components/ReceiptSettings';
+import { PageConnect } from '@/components/PageConnect';
 import { paymentChannels } from '@/lib/orders';
 
 export const dynamic = 'force-dynamic';
@@ -30,8 +31,34 @@ export default async function Settings() {
   const products = kb.filter((k) => k.kind === 'product');
   const policies = kb.filter((k) => k.kind !== 'product');
 
+  const pageRow = settings as unknown as {
+    page_id?: string | null; page_name?: string | null;
+    page_connected_at?: string | null; page_connected_by?: string | null;
+  };
+
   return (
     <div className="grid gap-6 lg:grid-cols-2">
+      <section className="space-y-3 lg:col-span-2">
+        <PageConnect
+          appId={process.env.NEXT_PUBLIC_FB_APP_ID ?? null}
+          current={{
+            id: pageRow.page_id ?? null,
+            name: pageRow.page_name ?? null,
+            at: pageRow.page_connected_at ?? null,
+            by: pageRow.page_connected_by ?? null,
+          }}
+          labels={{
+            title: t('pg_title'), sub: t('pg_sub'),
+            connected: t('pg_connected'), notConnected: t('pg_not_connected'),
+            connect: t('pg_connect'), reconnect: t('pg_reconnect'),
+            disconnect: t('pg_disconnect'), pick: t('pg_pick'),
+            loading: t('pg_loading'), noPages: t('pg_no_pages'),
+            cannotMessage: t('pg_cannot_message'), connectedBy: t('pg_connected_by'),
+            failed: t('pg_failed'), sdkMissing: t('pg_sdk_missing'),
+          }}
+        />
+      </section>
+
       <section className="space-y-3">
         <h1 className="text-xl font-semibold">{t('se_bot')}</h1>
         <SettingsForm

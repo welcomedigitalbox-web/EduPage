@@ -19,19 +19,15 @@ const TABS = [
 
 export default async function Inbox({
   searchParams,
-}: { searchParams: Promise<{ filter?: string; closed?: string }> }) {
+}: { searchParams: Promise<{ filter?: string }> }) {
   const { t } = await ctx();
   const sp = await searchParams;
   const filter = sp.filter ?? 'needs_human';
-  const all = await conversationList(filter);
-  // Threads past the 24-hour window cannot be replied to at all, so by default
-  // they are kept out of the working list rather than sitting in it looking
-  // actionable. The toggle brings them back for anyone who wants to look.
-  const showClosed = sp.closed === '1';
-  const isClosed = (r: { last_inbound_at?: string | null }) =>
-    !messageWindow(r.last_inbound_at).open;
-  const closedCount = all.filter(isClosed).length;
-  const rows = showClosed ? all : all.filter((r) => !isClosed(r));
+  // Threads past the 24-hour window cannot be replied to at all, so they never
+  // belong in a working list — there is no toggle to bring them back, because
+  // there is nothing anyone can do with them here.
+  const rows = (await conversationList(filter))
+    .filter((r) => messageWindow(r.last_inbound_at as string | null).open);
   const handler = { bot: t('ib_by_bot'), human: t('ib_by_human'), none: t('ib_by_none') };
 
   return (
@@ -44,12 +40,6 @@ export default async function Inbox({
             {t(tab.label)}
           </Link>
         ))}
-        {closedCount > 0 && (
-          <Link href={`/inbox?filter=${filter}${showClosed ? '' : '&closed=1'}`}
-            className={`btn ${showClosed ? 'border-brand text-brand' : ''}`}>
-            {showClosed ? t('wn_hide_closed') : `${t('wn_show_closed')} (${closedCount})`}
-          </Link>
-        )}
       </div>
 
       <div className="card overflow-x-auto">
@@ -77,11 +67,7 @@ export default async function Inbox({
                     <Link href={`/inbox/${r.id}`} className="hover:text-brand">
                       {c?.name ?? `PSID ${c?.psid?.slice(-6)}`}
                     </Link>
-                    {!win.open ? (
-                      <span className="ml-2 rounded border border-bad px-1 py-0.5 text-[10px] text-bad">
-                        {t('wn_closed_short')}
-                      </span>
-                    ) : win.closing ? (
+                    {win.closing ? (
                       <span className="ml-2 rounded border border-edge px-1 py-0.5 text-[10px] text-muted">
                         {win.hoursLeft >= 1
                           ? t('wn_open', { h: win.hoursLeft })
