@@ -41,6 +41,7 @@ export default async function Settings() {
       <section className="space-y-3 lg:col-span-2">
         <PageConnect
           appId={process.env.NEXT_PUBLIC_FB_APP_ID ?? null}
+          configId={process.env.NEXT_PUBLIC_FB_CONFIG_ID ?? null}
           current={{
             id: pageRow.page_id ?? null,
             name: pageRow.page_name ?? null,

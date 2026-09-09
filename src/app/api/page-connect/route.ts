@@ -33,7 +33,8 @@ export async function POST(req: NextRequest) {
 
   const b = await req.json() as {
     action?: 'list' | 'save' | 'disconnect';
-    userToken?: string; pageId?: string; pageName?: string; pageToken?: string;
+    userToken?: string; code?: string;
+    pageId?: string; pageName?: string; pageToken?: string;
   };
 
   if (b.action === 'disconnect') {
@@ -46,16 +47,37 @@ export async function POST(req: NextRequest) {
   }
 
   if (b.action === 'list') {
-    if (!b.userToken) return NextResponse.json({ error: 'no token' }, { status: 400 });
-
     const appId = process.env.NEXT_PUBLIC_FB_APP_ID;
     const secret = env.fbAppSecret();
-    let token = b.userToken;
+    let token = b.userToken ?? '';
+
+    // Business-type apps use Facebook Login for Business, which hands back a
+    // one-time code rather than a token. Exchange it here, where the app
+    // secret lives.
+    if (!token && b.code) {
+      if (!appId || !secret) {
+        return NextResponse.json({ error: 'app id or secret not configured' }, { status: 500 });
+      }
+      const ex = await fetch(
+        `${graph('oauth/access_token')}?client_id=${appId}` +
+        `&client_secret=${secret}&code=${encodeURIComponent(b.code)}&redirect_uri=`
+      ).then((r) => r.json()).catch(() => null) as
+        { access_token?: string; error?: { message?: string } } | null;
+      if (!ex?.access_token) {
+        return NextResponse.json(
+          { error: ex?.error?.message ?? 'could not exchange the login code' },
+          { status: 400 }
+        );
+      }
+      token = ex.access_token;
+    }
+
+    if (!token) return NextResponse.json({ error: 'no token' }, { status: 400 });
 
     // A short-lived token lasts about an hour; the Page tokens minted from a
     // long-lived one do not expire at all, which is the difference between
     // connecting once and reconnecting every week.
-    if (appId && secret) {
+    if (b.userToken && appId && secret) {
       const ex = await fetch(
         `${graph('oauth/access_token')}?grant_type=fb_exchange_token` +
         `&client_id=${appId}&client_secret=${secret}&fb_exchange_token=${b.userToken}`
