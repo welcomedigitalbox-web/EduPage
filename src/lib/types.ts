@@ -56,6 +56,11 @@ export interface Message {
 export interface BotSettings {
   is_enabled: boolean;
   business_name: string;
+  /** Receipt wording, editable in Settings — it is what the customer sees. */
+  receipt_shop_name?: string | null;
+  receipt_phone?: string | null;
+  receipt_note?: string | null;
+  receipt_footer?: string | null;
   default_store_id: string | null;
   fulfilment_store_ids: string[];
   quote_stock: boolean;

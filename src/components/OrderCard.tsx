@@ -1,7 +1,10 @@
 'use client';
 import { useState } from 'react';
 
-export interface CardSection { title: string; rows: [string, string][] }
+/** A row is label / value, plus an optional small line under the label — a
+ *  barcode, a reference, anything that identifies without shouting. */
+export type CardRow = [label: string, value: string, sub?: string];
+export interface CardSection { title: string; rows: CardRow[] }
 
 export interface CardLabels {
   open: string; close: string; copy: string; copied: string; print: string; hint: string;
@@ -60,10 +63,17 @@ export function OrderCard({
                     {sec.title}
                   </div>
                   <div className="space-y-1">
-                    {sec.rows.map(([k, v], i) => (
+                    {sec.rows.map(([k, v, sub], i) => (
                       <div key={i} className="flex items-start justify-between gap-3">
-                        <span className="shrink-0 text-slate-500">{k}</span>
-                        <span className="text-right font-medium">{v}</span>
+                        <span className="text-slate-500">
+                          {k}
+                          {sub ? (
+                            <span className="block text-[10px] tabular-nums text-slate-400">
+                              {sub}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="shrink-0 text-right font-medium">{v}</span>
                       </div>
                     ))}
                   </div>

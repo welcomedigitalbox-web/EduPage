@@ -30,6 +30,8 @@ export async function getSettings(): Promise<BotSettings> {
     ad_currency: 'USD', mmk_per_usd: 4500,
     handoff_keywords: [], office_hours: null, min_confidence: 0.6,
     max_bot_turns: 20, follow_up_hours: 4, ghost_hours: 48,
+    receipt_shop_name: null, receipt_phone: null,
+    receipt_note: null, receipt_footer: null,
   }) as BotSettings;
 }
 
