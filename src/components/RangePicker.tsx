@@ -14,9 +14,10 @@ const PRESETS: [key: string, label: keyof RangeLabels][] = [
 ];
 
 export function RangePicker({
-  preset, since, until, compare, labels,
+  preset, since, until, compare, labels, showCompare = true,
 }: {
   preset: string; since: string; until: string; compare: boolean; labels: RangeLabels;
+  showCompare?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -69,11 +70,13 @@ export function RangePicker({
         </div>
       )}
 
-      <label className="flex items-center gap-1.5 text-xs text-muted">
-        <input type="checkbox" checked={compare}
-          onChange={(e) => go({ compare: e.target.checked ? '1' : '0' })} />
-        {labels.compare}
-      </label>
+      {showCompare && (
+        <label className="flex items-center gap-1.5 text-xs text-muted">
+          <input type="checkbox" checked={compare}
+            onChange={(e) => go({ compare: e.target.checked ? '1' : '0' })} />
+          {labels.compare}
+        </label>
+      )}
     </div>
   );
 }

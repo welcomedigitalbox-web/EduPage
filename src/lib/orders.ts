@@ -156,15 +156,37 @@ export async function paymentChannels(opts: { all?: boolean } = {}) {
   return data ?? [];
 }
 
+/** Every order this person has placed, newest first, with enough of the item
+ *  names to recognise them without opening the order. */
+export async function contactOrders(contactId: string) {
+  const { data } = await admin()
+    .from('msgr_orders')
+    .select('id,order_no,order_date,status,grand_total,advance_payment,msgr_order_items(description,qty)')
+    .eq('contact_id', contactId)
+    .order('order_date', { ascending: false })
+    .limit(20);
+  return (data ?? []) as unknown as {
+    id: string; order_no: number; order_date: string; status: string;
+    grand_total: number; advance_payment: number;
+    msgr_order_items: { description: string; qty: number }[];
+  }[];
+}
+
 export async function orderList(opts: {
   status?: string; q?: string; since?: string; until?: string; limit?: number;
+  shop_id?: string; created_by?: string; payment_method?: string; payment_channel_id?: string;
 }) {
   let q = admin()
     .from('msgr_orders')
-    .select('*, msgr_shops(name), msgr_order_items(id)')
+    .select('*, msgr_shops(name), msgr_payment_channels(name), msgr_order_items(id)')
+    .order('order_date', { ascending: false })
     .order('created_at', { ascending: false })
-    .limit(opts.limit ?? 200);
+    .limit(opts.limit ?? 500);
   if (opts.status) q = q.eq('status', opts.status);
+  if (opts.shop_id) q = q.eq('shop_id', opts.shop_id);
+  if (opts.created_by) q = q.eq('created_by', opts.created_by);
+  if (opts.payment_method) q = q.eq('payment_method', opts.payment_method);
+  if (opts.payment_channel_id) q = q.eq('payment_channel_id', opts.payment_channel_id);
   if (opts.since) q = q.gte('order_date', opts.since);
   if (opts.until) q = q.lte('order_date', opts.until);
   if (opts.q?.trim()) {

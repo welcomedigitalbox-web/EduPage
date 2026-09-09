@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { conversationDetail } from '@/lib/queries';
+import { contactOrders } from '@/lib/orders';
 import { StageBadge, HandlerBadge, ago } from '@/components/ui';
 import { ReplyBox, StagePicker, StatusButtons, PosCustomerBox } from '@/components/ThreadActions';
 import { ctx } from '@/lib/server-ctx';
@@ -32,6 +33,13 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
     email: string | null;
   };
   const handler = { bot: t('ib_by_bot'), human: t('ib_by_human'), none: t('ib_by_none') };
+
+  // What this person has already bought. Staff answering "where is my parcel?"
+  // should not have to go and look it up in another tab.
+  const orders = await contactOrders(c.id);
+  const live = orders.filter((o) => o.status !== 'cancelled');
+  const orderTotal = live.reduce((a, o) => a + Number(o.grand_total || 0), 0);
+  const openCount = live.filter((o) => o.status !== 'delivered').length;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
@@ -115,6 +123,48 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
             open: t('th_pos_open'), linked: t('th_linked'), notLinked: t('th_not_linked'),
           }}
         />
+
+        <div className="card space-y-2 p-3">
+          <div className="flex items-baseline justify-between">
+            <div className="label">{t('th_orders')}</div>
+            {live.length > 0 && (
+              <span className="text-[11px] text-muted">
+                {t('th_orders_sum', { n: live.length, v: orderTotal.toLocaleString() })}
+              </span>
+            )}
+          </div>
+          {openCount > 0 && (
+            <div className="text-[11px] text-brand">{t('th_orders_open', { n: openCount })}</div>
+          )}
+          {orders.length === 0 && <p className="text-xs text-muted">{t('th_orders_none')}</p>}
+          <ul className="space-y-1">
+            {orders.map((o) => {
+              const names = (o.msgr_order_items ?? [])
+                .map((i) => `${i.description}${Number(i.qty) > 1 ? ` ×${i.qty}` : ''}`)
+                .join(', ');
+              return (
+                <li key={o.id}>
+                  <Link href={`/orders/${o.id}`}
+                    className="block rounded-lg border border-edge p-2 text-xs hover:border-brand">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="font-medium">
+                        EBH-{String(o.order_no).padStart(5, '0')}
+                      </span>
+                      <span className="tabular-nums">
+                        {Number(o.grand_total).toLocaleString()} MMK
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex items-baseline justify-between gap-2 text-muted">
+                      <span>{t(`os_${o.status}`)}</span>
+                      <span>{o.order_date}</span>
+                    </div>
+                    {names && <div className="mt-1 truncate text-muted">{names}</div>}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
 
         <Link
           href={`/orders/new?contact=${c.id}&convo=${convo.id}`}
