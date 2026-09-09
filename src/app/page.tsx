@@ -67,9 +67,9 @@ export default async function Overview({
               delta={d((x) => x.engaged)} href={seg('engaged')} />
         <Stat label={t('ov_noconvo')} value={num(o.noConvo)} tone="warn" sub={t('ov_noconvo_sub')}
               delta={d((x) => x.noConvo)} deltaGood="down" href={seg('no_convo')} />
-        <Stat label={t('ov_won')} value={num(o.orders)} tone="good"
+        <Stat label={t('ov_won')} value={num(o.buyers)} tone="good"
               sub={o.convRate != null ? t('ov_conv_rate', { n: o.convRate.toFixed(1) }) : undefined}
-              delta={d((x) => x.orders)} href={seg('won')} />
+              delta={d((x) => x.buyers)} href={seg('won')} />
       </section>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
