@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { env } from './env';
+import { pageCreds } from './page-creds';
 
 const graph = (path: string) =>
   `https://graph.facebook.com/${env.fbApiVersion()}/${path}`;
@@ -17,6 +18,7 @@ export function verifySignature(rawBody: string, header: string | null): boolean
 }
 
 export async function sendText(psid: string, text: string, tag?: string) {
+  const page = await pageCreds();
   const body: Record<string, unknown> = {
     recipient: { id: psid },
     message: { text: text.slice(0, 1900) },
@@ -24,7 +26,7 @@ export async function sendText(psid: string, text: string, tag?: string) {
   };
   if (tag) body.tag = tag;
 
-  const res = await fetch(`${graph('me/messages')}?access_token=${env.fbPageToken()}`, {
+  const res = await fetch(`${graph('me/messages')}?access_token=${page.token}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
@@ -42,12 +44,13 @@ export async function sendText(psid: string, text: string, tag?: string) {
 export async function sendAttachment(
   psid: string, url: string, type: 'image' | 'video' | 'audio' | 'file' = 'image'
 ) {
+  const page = await pageCreds();
   const body = {
     recipient: { id: psid },
     message: { attachment: { type, payload: { url, is_reusable: false } } },
     messaging_type: 'RESPONSE',
   };
-  const res = await fetch(`${graph('me/messages')}?access_token=${env.fbPageToken()}`, {
+  const res = await fetch(`${graph('me/messages')}?access_token=${page.token}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
@@ -58,7 +61,8 @@ export async function sendAttachment(
 }
 
 export async function senderAction(psid: string, action: 'typing_on' | 'typing_off' | 'mark_seen') {
-  await fetch(`${graph('me/messages')}?access_token=${env.fbPageToken()}`, {
+  const page = await pageCreds();
+  await fetch(`${graph('me/messages')}?access_token=${page.token}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ recipient: { id: psid }, sender_action: action }),
@@ -75,8 +79,9 @@ export async function fetchProfile(
   onError?: (detail: unknown) => void
 ) {
   try {
+    const page = await pageCreds();
     const res = await fetch(
-      `${graph(psid)}?fields=first_name,last_name,profile_pic&access_token=${env.fbPageToken()}`
+      `${graph(psid)}?fields=first_name,last_name,profile_pic&access_token=${page.token}`
     );
     const j = (await res.json()) as {
       first_name?: string; last_name?: string; profile_pic?: string;

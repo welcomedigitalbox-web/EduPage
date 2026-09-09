@@ -1,4 +1,6 @@
 import { env } from './env';
+import { pageCreds } from './page-creds';
+import { admin } from './supabase';
 
 const graph = (path: string) => `https://graph.facebook.com/${env.fbApiVersion()}/${path}`;
 
@@ -12,15 +14,30 @@ let cachedPageToken: { value: string; until: number } | null = null;
 
 async function pageToken(): Promise<string> {
   if (cachedPageToken && cachedPageToken.until > Date.now()) return cachedPageToken.value;
+
+  // A Page connected through Settings already carries its own Page token, so
+  // there is nothing to derive.
+  const page = await pageCreds();
+  const { data } = await admin()
+    .from('msgr_settings').select('page_access_token').eq('id', 1).maybeSingle();
+  if (data?.page_access_token) {
+    cachedPageToken = { value: page.token, until: Date.now() + 30 * 60_000 };
+    return page.token;
+  }
+
   const sys = env.metaAdsToken();
-  const pageId = env.fbPageId();
-  const res = await fetch(`${graph(pageId)}?fields=access_token&access_token=${sys}`);
+  const res = await fetch(`${graph(page.id)}?fields=access_token&access_token=${sys}`);
   const json = await res.json() as { access_token?: string; error?: { message?: string } };
   if (!json.access_token) {
     throw new Error(`could not derive a page token: ${json.error?.message ?? 'no access_token returned'}`);
   }
   cachedPageToken = { value: json.access_token, until: Date.now() + 30 * 60_000 };
   return json.access_token;
+}
+
+/** The connected Page's id, for the insight endpoints below. */
+async function pageId(): Promise<string> {
+  return (await pageCreds()).id;
 }
 
 /** Meta retires insight metrics without much warning. Ask for each one on its
@@ -31,7 +48,7 @@ async function metricSeries(
   const params = new URLSearchParams({
     metric, period: 'day', since, until, access_token: token,
   });
-  const res = await fetch(`${graph(`${env.fbPageId()}/insights`)}?${params}`);
+  const res = await fetch(`${graph(`${await pageId()}/insights`)}?${params}`);
   const json = await res.json() as {
     data?: { name: string; values: { value: unknown; end_time: string }[] }[];
   };
@@ -67,7 +84,7 @@ export async function probeMetrics(
       metric: m, period: 'day', since, until, access_token: token,
     });
     try {
-      const res = await fetch(`${graph(`${env.fbPageId()}/insights`)}?${params}`);
+      const res = await fetch(`${graph(`${await pageId()}/insights`)}?${params}`);
       const json = await res.json() as {
         data?: { name: string; values?: unknown[] }[]; error?: { message?: string; code?: number };
       };
@@ -151,7 +168,7 @@ export async function fetchPageDaily(since: string, until: string): Promise<{
   let fans: number | null = null;
   try {
     const r = await fetch(
-      `${graph(env.fbPageId())}?fields=followers_count,fan_count&access_token=${token}`
+      `${graph(await pageId())}?fields=followers_count,fan_count&access_token=${token}`
     );
     const j = await r.json() as { followers_count?: number; fan_count?: number };
     followers = j.followers_count ?? null;
@@ -210,7 +227,7 @@ export async function fetchPosts(
   }
 
   const raw: Raw[] = [];
-  let url = `${graph(`${env.fbPageId()}/posts`)}?${params}`;
+  let url = `${graph(`${await pageId()}/posts`)}?${params}`;
   for (let page = 0; page < 25 && url && raw.length < cap; page++) {
     const res = await fetch(url);
     const json = await res.json() as { data?: Raw[]; paging?: { next?: string }; error?: { message?: string } };
