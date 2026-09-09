@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   validateOrder, orderMoney, requiredAdvance, normalizePhone,
@@ -47,7 +47,12 @@ export function OrderForm({
   labels: OrderFormLabels;
 }) {
   const router = useRouter();
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Yangon' });
+  // Computed once at module scope would still differ between the server's UTC
+  // render and the browser's, so the date is resolved on the client.
+  const [today, setToday] = useState(initial.order_date ?? '');
+  useEffect(() => {
+    setToday(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Yangon' }));
+  }, []);
 
   const [f, setF] = useState({
     customer_name: initial.customer_name ?? '',
@@ -55,7 +60,7 @@ export function OrderForm({
     city: initial.city ?? '',
     delivery_address: initial.delivery_address ?? '',
     shop_id: initial.shop_id ?? '',
-    order_date: initial.order_date ?? today,
+    order_date: initial.order_date ?? '',
     delivery_method: initial.delivery_method ?? '',
     payment_method: initial.payment_method ?? 'cod',
     payment_channel_id: initial.payment_channel_id ?? '',
@@ -78,6 +83,9 @@ export function OrderForm({
   // the moment it opens is noise, not help.
   const [touched, setTouched] = useState(false);
   const [uploading, setUploading] = useState(false);
+  useEffect(() => {
+    if (today) setF((p) => (p.order_date ? p : { ...p, order_date: today }));
+  }, [today]);
 
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) =>
     setF((p) => ({ ...p, [k]: v }));

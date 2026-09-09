@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const INPUT =
@@ -22,8 +22,13 @@ export function FxRates({
   };
 }) {
   const router = useRouter();
-  const today = new Date().toLocaleDateString('en-CA');
-  const [draft, setDraft] = useState({ date: today, mmk_per_usd: rows[0]?.mmk_per_usd ?? 4500 });
+  // Filled in after mount: the server renders in UTC and the browser in the
+  // shop's own timezone, and a date that differs between the two is a
+  // hydration mismatch.
+  const [draft, setDraft] = useState({ date: '', mmk_per_usd: rows[0]?.mmk_per_usd ?? 4500 });
+  useEffect(() => {
+    setDraft((d) => (d.date ? d : { ...d, date: new Date().toLocaleDateString('en-CA') }));
+  }, []);
   const [busy, setBusy] = useState(false);
 
   async function save() {

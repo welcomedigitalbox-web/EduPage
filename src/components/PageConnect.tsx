@@ -25,8 +25,8 @@ declare global {
     FB?: {
       init: (o: Record<string, unknown>) => void;
       login: (
-        cb: (r: { authResponse?: { accessToken?: string } }) => void,
-        o: { scope: string }
+        cb: (r: { authResponse?: { accessToken?: string; code?: string } }) => void,
+        o: Record<string, unknown>
       ) => void;
     };
     fbAsyncInit?: () => void;
@@ -38,8 +38,11 @@ declare global {
  * choose from the Pages you manage. Doing it here rather than by pasting a
  * token into a deploy means the shop can reconnect a Page themselves.
  */
-export function PageConnect({ appId, current, labels }: {
+export function PageConnect({ appId, configId, current, labels }: {
   appId: string | null;
+  /** Set for Business-type apps, which use Facebook Login for Business and a
+   *  saved configuration instead of a plain scope list. */
+  configId?: string | null;
   current: { id: string | null; name: string | null; at: string | null; by: string | null };
   labels: PageConnectLabels;
 }) {
@@ -74,19 +77,27 @@ export function PageConnect({ appId, current, labels }: {
   function login() {
     setErr(null);
     if (!window.FB) { setErr(labels.sdkMissing); return; }
+
+    // Login for Business returns a one-time code; classic login returns a
+    // token. Whichever comes back is what gets sent to the server.
+    const opts = configId
+      ? { config_id: configId, response_type: 'code', override_default_response_type: true }
+      : { scope: SCOPES };
+
     window.FB.login(async (r) => {
       const token = r.authResponse?.accessToken;
-      if (!token) return;
+      const code = r.authResponse?.code;
+      if (!token && !code) return;
       setBusy(true);
       try {
-        const j = await post({ action: 'list', userToken: token });
+        const j = await post({ action: 'list', userToken: token, code });
         setPages(j.pages as FbPage[]);
       } catch (e) {
         setErr(`${labels.failed}: ${(e as Error).message}`);
       } finally {
         setBusy(false);
       }
-    }, { scope: SCOPES });
+    }, opts);
   }
 
   async function choose(p: FbPage) {
