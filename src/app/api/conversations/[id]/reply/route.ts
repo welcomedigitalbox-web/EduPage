@@ -4,6 +4,7 @@ import { sendText, sendAttachment } from '@/lib/meta';
 import { recordMessage, closeFollowUps } from '@/lib/crm';
 import { cookies } from 'next/headers';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
+import { isWindowError } from '@/lib/window';
 
 export const runtime = 'nodejs';
 
@@ -38,10 +39,27 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       mid = sent.message_id ?? null;
     }
     if (text?.trim()) {
-      const sent = await sendText(contact.psid, text);
-      mid = sent.message_id ?? mid;
+      try {
+        const sent = await sendText(contact.psid, text);
+        mid = sent.message_id ?? mid;
+      } catch (e) {
+        // Past 24 hours a plain reply is refused. The HUMAN_AGENT tag extends
+        // it to seven days, but only for Pages approved for that feature — so
+        // try it, and if Meta refuses that too, say plainly that the window
+        // has closed instead of pasting the raw API error at staff.
+        if (!isWindowError(e)) throw e;
+        try {
+          const sent = await sendText(contact.psid, text, 'HUMAN_AGENT');
+          mid = sent.message_id ?? mid;
+        } catch {
+          return NextResponse.json({ error: 'window_closed' }, { status: 409 });
+        }
+      }
     }
   } catch (e) {
+    if (isWindowError(e)) {
+      return NextResponse.json({ error: 'window_closed' }, { status: 409 });
+    }
     return NextResponse.json({ error: String(e) }, { status: 502 });
   }
 

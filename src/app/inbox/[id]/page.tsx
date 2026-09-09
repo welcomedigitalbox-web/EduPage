@@ -30,7 +30,7 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
     id: string; name: string | null; psid: string; stage: LeadStage; phone: string | null;
     address: string | null; source_type: string | null; source_ad_id: string | null;
     first_seen_at: string; tags: string[]; customer_id: string | null;
-    email: string | null;
+    email: string | null; last_inbound_at: string | null;
   };
   const handler = { bot: t('ib_by_bot'), human: t('ib_by_human'), none: t('ib_by_none') };
 
@@ -85,10 +85,14 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
         </div>
 
         <ReplyBox conversationId={convo.id}
+          lastInboundAt={(convo.last_inbound_at as string) ?? c.last_inbound_at ?? null}
           labels={{
             placeholder: t('th_reply_ph'), send: t('th_send'), hint: t('th_send_hint'),
             failed: t('th_send_failed'), attach: t('th_attach'), uploading: t('th_uploading'),
             remove: t('th_remove'), tooLarge: t('th_too_large'),
+            windowClosed: t('wn_closed'), windowClosedHelp: t('wn_closed_help'),
+            windowLeft: t('wn_open'), windowLeftMin: t('wn_open_min'),
+            closingSoon: t('wn_closing'),
           }} />
       </div>
 
