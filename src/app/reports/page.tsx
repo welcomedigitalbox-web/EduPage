@@ -97,6 +97,20 @@ export default async function Reports({
           />
         </div>
         <div className="card overflow-x-auto">
+          <div className="label p-3">{t('sr_by_channel')}</div>
+          <Table
+            head={[t('sr_channel'), t('sr_orders'), t('sr_revenue')]}
+            rows={rep.byChannel.map((c) => [
+              c.channel === 'pos' ? t('sr_ch_pos') : t('sr_ch_online'),
+              num(c.orders), money(c.revenue),
+            ])}
+            empty={t('sr_empty')}
+          />
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="card overflow-x-auto">
           <div className="label p-3">{t('sr_by_status')}</div>
           <Table
             head={[t('sr_status'), t('sr_orders'), t('sr_revenue')]}

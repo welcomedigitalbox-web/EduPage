@@ -270,6 +270,7 @@ export interface SalesReport {
   byStatus: { status: string; orders: number; revenue: number }[];
   byStore: { store_id: string; store_name: string; orders: number; revenue: number }[];
   byDay: { day: string; orders: number; revenue: number }[];
+  byChannel: { channel: string; orders: number; revenue: number }[];
   topProducts: { name: string; qty: number; revenue: number }[];
   fromAds: { orders: number; revenue: number };
 }
@@ -284,7 +285,7 @@ export async function salesReport(since: string, until: string): Promise<SalesRe
 
   const { data: sales } = await db
     .from('v_msgr_sales')
-    .select('sale_id,total,total_usd,order_status,store_id,created_at,ad_id')
+    .select('sale_id,total,total_usd,order_status,store_id,created_at,ad_id,channel')
     .gte('created_at', from).lte('created_at', to)
     .limit(5000);
   const rows = sales ?? [];
@@ -305,26 +306,41 @@ export async function salesReport(since: string, until: string): Promise<SalesRe
   };
 
   const statusMap = group((r) => String(r.order_status ?? 'unknown'));
+  const channelMap = group((r) => String(r.channel ?? 'online'));
   const storeMap = group((r) => String(r.store_id ?? '—'));
   const dayMap = group((r) =>
     new Date(r.created_at as string).toLocaleDateString('en-CA', { timeZone: 'Asia/Yangon' })
   );
 
-  // Shop names come from the online-order shop list.
+  // A store id can belong to either shop list; look in both and merge.
   const storeIds = [...storeMap.keys()].filter((s) => s !== '—');
-  const { data: stores } = storeIds.length
-    ? await db.from('msgr_shops').select('id,name').in('id', storeIds)
-    : { data: [] as { id: string; name: string }[] };
-  const storeName = new Map((stores ?? []).map((s) => [s.id, s.name]));
+  const [ownShops, posStores] = storeIds.length
+    ? await Promise.all([
+        db.from('msgr_shops').select('id,name').in('id', storeIds),
+        db.from('stores').select('id,name').in('id', storeIds),
+      ])
+    : [{ data: [] }, { data: [] }];
+  const storeName = new Map(
+    [...(ownShops.data ?? []), ...(posStores.data ?? [])]
+      .map((s) => [s.id as string, s.name as string])
+  );
 
-  // Line items for the same orders, for the best-seller table.
-  const saleIds = rows.map((r) => r.sale_id as string);
+  // Lines live in two places — orders taken here, and POS sales — so the
+  // best-seller table reads whichever side each sale came from.
   const items: { product_name: string; qty: number; line_total: number }[] = [];
-  for (let i = 0; i < saleIds.length; i += 200) {
+  const onlineIds = rows.filter((r) => r.channel === 'online').map((r) => r.sale_id as string);
+  const posIds = rows.filter((r) => r.channel !== 'online').map((r) => r.sale_id as string);
+
+  for (let i = 0; i < onlineIds.length; i += 200) {
     const { data } = await db.from('msgr_order_items')
-      .select('description,qty,line_total').in('order_id', saleIds.slice(i, i + 200));
+      .select('description,qty,line_total').in('order_id', onlineIds.slice(i, i + 200));
     items.push(...((data ?? []) as { description: string; qty: number; line_total: number }[])
       .map((d) => ({ product_name: d.description, qty: d.qty, line_total: d.line_total })));
+  }
+  for (let i = 0; i < posIds.length; i += 200) {
+    const { data } = await db.from('sale_items')
+      .select('product_name,qty,line_total').in('sale_id', posIds.slice(i, i + 200));
+    items.push(...((data ?? []) as typeof items));
   }
   const prodMap = new Map<string, { qty: number; revenue: number }>();
   for (const it of items) {
@@ -348,6 +364,8 @@ export async function salesReport(since: string, until: string): Promise<SalesRe
       store_id, store_name: storeName.get(store_id) ?? store_id, ...v,
     })).sort((a, b) => b.revenue - a.revenue),
     byDay: [...dayMap].map(([day, v]) => ({ day, ...v })).sort((a, b) => a.day.localeCompare(b.day)),
+    byChannel: [...channelMap].map(([channel, v]) => ({ channel, ...v }))
+      .sort((a, b) => b.revenue - a.revenue),
     topProducts: [...prodMap].map(([name, v]) => ({ name, ...v }))
       .sort((a, b) => b.revenue - a.revenue).slice(0, 20),
     fromAds: {
