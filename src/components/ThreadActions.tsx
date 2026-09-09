@@ -1,15 +1,19 @@
 'use client';
-import { useState, useTransition, useRef } from 'react';
+import { useState, useTransition, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { LeadStage } from '@/lib/types';
 
 export function ReplyBox({
-  conversationId, labels,
+  conversationId, lastInboundAt, labels,
 }: {
   conversationId: string;
+  /** Drives the 24-hour window notice; null means the customer never wrote. */
+  lastInboundAt?: string | null;
   labels: {
     placeholder: string; send: string; hint: string; failed: string;
     attach: string; uploading: string; remove: string; tooLarge: string;
+    windowClosed: string; windowClosedHelp: string; windowLeft: string;
+    windowLeftMin: string; closingSoon: string;
   };
 }) {
   const [text, setText] = useState('');
@@ -19,6 +23,17 @@ export function ReplyBox({
   const [pending, start] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  // Computed on the client so it keeps counting down while the tab is open.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const msLeft = lastInboundAt
+    ? Date.parse(lastInboundAt) + 24 * 3600_000 - now
+    : -1;
+  const open = msLeft > 0;
+  const minutes = Math.max(0, Math.floor(msLeft / 60_000));
 
   async function upload(f: File) {
     setErr(null); setBusy(true);
@@ -50,11 +65,22 @@ export function ReplyBox({
     });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      setErr(`${labels.failed}${j.error ? `: ${String(j.error).slice(0, 120)}` : ''}`);
+      setErr(j.error === 'window_closed'
+        ? labels.windowClosed
+        : `${labels.failed}${j.error ? `: ${String(j.error).slice(0, 120)}` : ''}`);
       return;
     }
     setText(''); setFile(null);
     start(() => router.refresh());
+  }
+
+  if (!open) {
+    return (
+      <div className="space-y-1 border-t border-edge bg-bad/5 p-3">
+        <p className="text-sm text-bad">{labels.windowClosed}</p>
+        <p className="text-xs text-muted">{labels.windowClosedHelp}</p>
+      </div>
+    );
   }
 
   return (
@@ -89,6 +115,11 @@ export function ReplyBox({
       <div className="mt-2 flex items-center justify-between gap-2">
         <span className="flex-1 truncate text-xs text-muted">
           {err ?? (busy ? labels.uploading : labels.hint)}
+        </span>
+        <span className={`shrink-0 text-[11px] ${minutes < 180 ? 'text-bad' : 'text-muted'}`}>
+          {minutes >= 60
+            ? labels.windowLeft.replace('{h}', String(Math.floor(minutes / 60)))
+            : labels.windowLeftMin.replace('{m}', String(minutes))}
         </span>
         <button className="btn text-xs" disabled={busy} onClick={() => fileInput.current?.click()}>
           {labels.attach}
