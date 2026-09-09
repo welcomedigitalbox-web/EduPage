@@ -145,6 +145,15 @@ async function handleEvent(pageId: string, ev: MessagingEvent) {
   // the bot. If the next question is one the bot can answer from the knowledge
   // base, answering beats leaving the customer waiting for a busy shop.
 
+  // Customers type in bursts — "hello", "is this in stock", "how much" as three
+  // messages in ten seconds. Answering each one produces the duplicate replies
+  // staff were seeing, and costs three model calls. Wait a moment, and if
+  // something newer arrived, let that event do the answering.
+  await new Promise((r) => setTimeout(r, 5000));
+  const { data: fresh } = await db
+    .from('msgr_conversations').select('last_inbound_at').eq('id', convo.id).maybeSingle();
+  if (fresh?.last_inbound_at && fresh.last_inbound_at > sentAt) return;
+
   await runBotTurn({
     contact: contact as never,
     convo: { ...convo, inbound_count: convo.inbound_count + 1 } as never,

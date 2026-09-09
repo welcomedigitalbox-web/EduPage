@@ -6,6 +6,7 @@ import {
   scheduleFollowUp, preflightHandoff,
 } from './crm';
 import type { LeadStage } from './types';
+import { quickReply } from './quick';
 
 interface TurnArgs {
   contact: { id: string; psid: string; name: string | null; stage: string; store_id?: string | null };
@@ -76,9 +77,40 @@ export async function runBotTurn(args: TurnArgs): Promise<{ replied: boolean; re
   }
 
   await senderAction(contact.psid, 'mark_seen');
+
+  // Free path first: greetings and thanks do not need a language model.
+  const quick = quickReply(args.text ?? null, {
+    businessName: settings.business_name,
+    isFirstMessage: (convo.inbound_count ?? 0) <= 1,
+    greeting: settings.greeting,
+  });
+  if (quick) {
+    try {
+      const sent = await sendText(contact.psid, quick.reply);
+      const { recordMessage } = await import('./crm');
+      await recordMessage({
+        conversationId: convo.id, contactId: contact.id, mid: sent.message_id ?? null,
+        direction: 'out', author: 'bot', text: quick.reply,
+        ai: { intent: quick.kind, quick: true, confidence: 1 },
+      });
+      const now = new Date().toISOString();
+      await db.from('msgr_conversations').update({
+        outbound_count: convo.outbound_count + 1,
+        bot_reply_count: convo.bot_reply_count + 1,
+        last_reply_by: 'bot',
+        last_message_at: now,
+      }).eq('id', convo.id);
+      await db.from('msgr_contacts').update({ last_outbound_at: now }).eq('id', contact.id);
+      return { replied: true };
+    } catch (e) {
+      console.error('[bot] quick reply failed', e);
+      // Fall through to the model rather than leaving the customer waiting.
+    }
+  }
+
   await senderAction(contact.psid, 'typing_on');
 
-  const history = await recentHistory(convo.id);
+  const history = await recentHistory(convo.id, 10);
   const decision = await decide({
     settings, kb: await getKb(settings), history, customerName: contact.name,
   });

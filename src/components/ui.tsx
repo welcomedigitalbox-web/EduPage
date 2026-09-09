@@ -2,9 +2,11 @@ import Link from 'next/link';
 import type { LeadStage } from '@/lib/types';
 
 export function Stat({
-  label, value, sub, tone, delta, deltaGood = 'up', prev,
+  label, value, sub, tone, delta, deltaGood = 'up', prev, href,
 }: {
   label: string; value: string; sub?: string; tone?: 'good' | 'warn' | 'bad';
+  /** Where the number can be opened up — the list behind it. */
+  href?: string;
   /** Percent change against the previous period; null means "no basis". */
   delta?: number | null;
   /** Which direction is good — cost metrics want 'down'. */
@@ -17,8 +19,8 @@ export function Stat({
   const flat = delta === 0 || delta == null;
   const good = deltaGood === 'up' ? up : !up;
   const deltaColor = flat ? 'text-muted' : good ? 'text-good' : 'text-bad';
-  return (
-    <div className="card p-4">
+  const body = (
+    <>
       <div className="label">{label}</div>
       <div className="mt-1 flex items-baseline gap-2">
         <div className={`text-2xl font-semibold tabular-nums ${color}`}>{value}</div>
@@ -30,7 +32,15 @@ export function Stat({
       </div>
       {sub && <div className="mt-1 text-xs text-muted">{sub}</div>}
       {prev && <div className="mt-0.5 text-[11px] text-muted">{prev}</div>}
-    </div>
+    </>
+  );
+
+  if (!href) return <div className="card p-4">{body}</div>;
+  return (
+    <Link href={href}
+      className="card block p-4 transition-colors hover:border-brand focus-visible:border-brand">
+      {body}
+    </Link>
   );
 }
 

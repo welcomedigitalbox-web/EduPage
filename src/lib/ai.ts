@@ -60,7 +60,7 @@ const DECISION_TOOL: Anthropic.Tool = {
       reply: {
         type: 'string',
         description:
-          'The message to send back. Short (1-3 sentences), same language the customer wrote in. Empty string if needs_human is true and no holding message is appropriate.',
+          'The message to send back. At most 2 short sentences — this is Messenger. Same language the customer wrote in. Empty string if needs_human is true and no holding message is appropriate.',
       },
       intent: {
         type: 'string',
@@ -81,7 +81,10 @@ const DECISION_TOOL: Anthropic.Tool = {
         description:
           'True when a person must take over: complaint, refund, price negotiation beyond policy, anything not covered by the knowledge base, or an order that needs confirming.',
       },
-      handoff_reason: { type: 'string' },
+      handoff_reason: {
+        type: 'string',
+        description: 'Only when needs_human is true. A few words, not a sentence.',
+      },
       extracted: {
         type: 'object',
         description: 'Facts the customer stated in their own words. Never guess these.',
@@ -109,6 +112,7 @@ const DECISION_TOOL: Anthropic.Tool = {
       },
       follow_up: {
         type: 'object',
+        description: 'Omit entirely unless the customer should be chased if they go quiet.',
         properties: {
           needed: { type: 'boolean' },
           hours: { type: 'number', description: 'Hours from now to check back if they go silent.' },
@@ -117,7 +121,7 @@ const DECISION_TOOL: Anthropic.Tool = {
         required: ['needed'],
       },
     },
-    required: ['reply', 'intent', 'stage', 'confidence', 'needs_human', 'follow_up'],
+    required: ['reply', 'intent', 'stage', 'confidence', 'needs_human'],
   },
 };
 
@@ -153,13 +157,31 @@ LANGUAGE: ${lang}
 OFFICE HOURS: ${s.office_hours ?? 'not specified'}
 
 HARD RULES — breaking these costs the shop money:
-1. Answer ONLY from the knowledge base below. Never invent a price, a stock level, a delivery time, or a promotion.
-2. If the answer is not in the knowledge base, set needs_human = true and keep the reply to a short holding line ("ခဏလေးစောင့်ပေးပါ၊ staff ကနေ ချက်ချင်းပြန်ဖြေပေးပါမယ်ရှင်").
+1. The knowledge base below is the ONLY thing you know about this shop. Every
+   factual claim in your reply must be traceable to a specific line in it.
+   Before you answer, find the line you are relying on. If you cannot point to
+   one, you do not know the answer.
+1b. Things you must NEVER state unless the knowledge base says them in words:
+   prices, stock, product names or features, delivery times or fees for a place
+   not listed, payment methods, promotions or discounts, shop addresses or
+   opening hours, phone numbers, warranty or return terms. Do not reason your
+   way to one of these from something similar — a policy for Yangon says
+   nothing about Taunggyi.
+2. If the answer is not there, set needs_human = true. Say so WARMLY — this is
+   a shop talking to a customer, not a system returning an error. Acknowledge
+   what they asked, apologise lightly, and promise a person will follow up.
+   Something in the spirit of "ဒီအကြောင်းလေးကတော့ ကျွန်မ သေချာမသိသေးလို့ပါရှင်၊
+   staff ကနေ ချက်ချင်း စစ်ပြီး ပြန်ဖြေပေးပါမယ်နော်" — vary the wording naturally,
+   keep the shop's persona, and use ရှင်/ပါ/နော် the way a Myanmar shop does.
+   What you must NOT do is fill the gap with a guess, a "probably", or a general
+   statement about shops. Warm and honest, never cold, never invented.
+2b. Greetings, thanks and small talk you may answer normally — those are not
+   factual claims. Confidence should be high for those.
 3. Complaints, refunds, damaged goods, or an angry customer → needs_human = true, always.
 4. Prices and stock in the knowledge base come live from the shop's POS. Quote them exactly. If an item is marked OUT OF STOCK, say so and offer an alternative from the list — never take an order for it.
 4b. When the customer commits to buying, collect name, phone and full address, fill extracted.items with the exact ids from the knowledge base, set stage = "ordered" and needs_human = true. A person confirms every order before it ships.
 5. Never promise a discount. Never quote a price that is not in the knowledge base.
-6. Keep replies to 1-3 short sentences. This is Messenger, not email. No bullet lists, no headings.
+6. Keep replies to ONE or TWO short sentences. This is Messenger, not email. No bullet lists, no headings, no repeating what the customer just said back to them.
 7. Do not use emoji unless the customer used one first.
 8. Set confidence honestly. Low confidence is far better than a confident wrong answer.
 9. BURMESE WORDING — verbs get mangled easily, so use exactly these:
@@ -175,6 +197,10 @@ STAGE GUIDE:
 - negotiating: haggling, comparing, asking for a discount
 - ordered: agreed to buy, order details being taken
 - lost: said no / too expensive / already bought elsewhere
+
+The knowledge base covers these topics and nothing else. A question outside
+this list goes to a person:
+${kb.map((k) => k.title).slice(0, 80).join(' | ')}
 
 KNOWLEDGE BASE (live from the POS — prices and stock are current as of this second)
 ${kbBlock(kb, s.quote_stock)}`;
@@ -199,7 +225,9 @@ export async function decide(opts: {
 
   const res = await client().messages.create({
     model,
-    max_tokens: 1024,
+    // A Messenger reply plus its classification never needs more than this;
+    // the ceiling stops a rambling turn from costing five times a normal one.
+    max_tokens: 500,
     // The product catalogue + policies are the same on every turn and dwarf
     // the chat itself, so cache them: repeat reads bill at a fraction of the
     // normal input price. The cache lives ~5 minutes — i.e. exactly the span

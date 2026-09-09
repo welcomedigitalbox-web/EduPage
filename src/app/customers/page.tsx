@@ -10,10 +10,21 @@ export const dynamic = 'force-dynamic';
 
 export default async function Customers({
   searchParams,
-}: { searchParams: Promise<{ q?: string; stage?: string; source?: string }> }) {
+}: {
+  searchParams: Promise<{
+    q?: string; stage?: string; source?: string;
+    segment?: string; since?: string; until?: string;
+  }>;
+}) {
   const { t } = await ctx();
   const sp = await searchParams;
-  const rows = await customerList({ q: sp.q, stage: sp.stage, source: sp.source });
+  const rows = await customerList({
+    q: sp.q, stage: sp.stage, source: sp.source,
+    segment: sp.segment, since: sp.since, until: sp.until,
+  });
+  const segmentLabel = sp.segment
+    ? t(`seg_${sp.segment}`) + (sp.since ? ` · ${sp.since} → ${sp.until}` : '')
+    : null;
 
   const exportUrl = `/api/customers/export?${new URLSearchParams(
     Object.entries(sp).filter(([, v]) => v) as [string, string][]
@@ -24,10 +35,16 @@ export default async function Customers({
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">{t('cu_title')}</h1>
-          <p className="text-sm text-muted">{t('cu_sub')}</p>
+          <p className="text-sm text-muted">{segmentLabel ?? t('cu_sub')}</p>
         </div>
         <a className="btn" href={exportUrl}>{t('cu_export')}</a>
       </div>
+
+      {segmentLabel && (
+        <Link href="/customers" className="inline-block text-xs text-brand hover:underline">
+          {t('seg_clear')}
+        </Link>
+      )}
 
       <CustomerFilters
         initial={{ q: sp.q ?? '', stage: sp.stage ?? '', source: sp.source ?? '' }}

@@ -1,9 +1,15 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { ctx } from '@/lib/server-ctx';
 import { LangToggle, SignOut } from '@/components/TopBar';
-import { InboxBadge } from '@/components/NavBadge';
+import { Shell } from '@/components/Shell';
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  // The dashboard is used one-handed on a phone; let people zoom a dense table.
+  maximumScale: 5,
+};
 
 export const metadata: Metadata = {
   title: 'Messenger AI CRM',
@@ -26,36 +32,27 @@ const NAV = [
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { lang, session, t } = await ctx();
 
+  const nav = NAV
+    .filter((n) => !n.managerOnly || session?.role === 'manager')
+    .map((n) => ({
+      href: n.href === '/inbox' ? '/inbox?filter=unanswered' : n.href,
+      label: t(n.key),
+    }));
+
   return (
     <html lang={lang === 'en' ? 'en' : 'my'}>
       <body>
         {session ? (
-          <div className="flex min-h-screen">
-            <aside className="flex w-56 shrink-0 flex-col border-r border-edge bg-panel p-4">
-              <div className="mb-4 text-sm font-semibold">{t('app_name')}</div>
-              <div className="mb-4"><LangToggle lang={lang} /></div>
-              <nav className="flex-1 space-y-1">
-                {NAV.filter((n) => !n.managerOnly || session.role === 'manager').map((n) => (
-                  <Link key={n.href}
-                    href={n.href === '/inbox' ? '/inbox?filter=unanswered' : n.href}
-                    className="flex items-center rounded-lg px-3 py-2 text-sm text-muted hover:bg-edge hover:text-white">
-                    {t(n.key)}
-                    {n.href === '/inbox' && <InboxBadge />}
-                  </Link>
-                ))}
-              </nav>
-              <div className="border-t border-edge pt-2">
-                <div className="truncate px-3 py-1 text-xs text-muted">
-                  {session.name || session.email}
-                  <span className="ml-1 opacity-70">
-                    · {t(session.role === 'manager' ? 'us_role_manager' : 'us_role_agent')}
-                  </span>
-                </div>
-                <SignOut label={t('sign_out')} />
-              </div>
-            </aside>
-            <main className="flex-1 overflow-x-hidden p-6">{children}</main>
-          </div>
+          <Shell
+            nav={nav}
+            appName={t('app_name')}
+            user={session.name || session.email}
+            role={t(session.role === 'manager' ? 'us_role_manager' : 'us_role_agent')}
+            langToggle={<LangToggle lang={lang} />}
+            signOut={<SignOut label={t('sign_out')} />}
+          >
+            {children}
+          </Shell>
         ) : (
           <main>{children}</main>
         )}

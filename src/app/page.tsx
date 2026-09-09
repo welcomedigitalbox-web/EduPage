@@ -29,6 +29,10 @@ export default async function Overview({
     stageCounts(r.since, r.until),
   ]);
 
+  // Every headline number opens the list behind it, scoped to this same range.
+  const seg = (name: string) =>
+    `/customers?segment=${name}&since=${r.since}&until=${r.until}`;
+
   // Only show a delta when there is a previous period to compare against.
   const d = (pick: (x: NonNullable<typeof prev>) => number | null) =>
     prev ? delta(Number(pick(o) ?? 0), Number(pick(prev) ?? 0)) : undefined;
@@ -58,18 +62,18 @@ export default async function Overview({
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label={t('ov_leads')} value={num(o.leads)} sub={t('ov_leads_sub')}
-              delta={d((x) => x.leads)} />
+              delta={d((x) => x.leads)} href={seg('leads')} />
         <Stat label={t('ov_engaged')} value={num(o.engaged)} sub={t('ov_engaged_sub')}
-              delta={d((x) => x.engaged)} />
+              delta={d((x) => x.engaged)} href={seg('engaged')} />
         <Stat label={t('ov_noconvo')} value={num(o.noConvo)} tone="warn" sub={t('ov_noconvo_sub')}
-              delta={d((x) => x.noConvo)} deltaGood="down" />
+              delta={d((x) => x.noConvo)} deltaGood="down" href={seg('no_convo')} />
         <Stat label={t('ov_won')} value={num(o.orders)} tone="good"
               sub={o.convRate != null ? t('ov_conv_rate', { n: o.convRate.toFixed(1) }) : undefined}
-              delta={d((x) => x.orders)} />
+              delta={d((x) => x.orders)} href={seg('won')} />
       </section>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label={t('ov_spend')} value={money(o.spend, cur)} delta={d((x) => x.spend)}
+        <Stat label={t('ov_spend')} value={money(o.spend, cur)} href="/ads" delta={d((x) => x.spend)}
               deltaGood="down" prev={prev ? t('rg_prev', { v: money(prev.spend, cur) }) : undefined} />
         <Stat label={t('ov_cpl')} value={money(o.costPerLead, cur, 2)}
               delta={d((x) => x.costPerLead)} deltaGood="down"
@@ -82,9 +86,11 @@ export default async function Overview({
       </section>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label={t('ov_bot_handled')} value={num(o.botHandled)} />
-        <Stat label={t('ov_needs_human')} value={num(o.needsHuman)} tone={o.needsHuman ? 'warn' : 'good'} />
-        <Stat label={t('ov_tasks')} value={num(o.pendingTasks)} tone={o.pendingTasks ? 'warn' : 'good'} />
+        <Stat label={t('ov_bot_handled')} value={num(o.botHandled)} href="/inbox?filter=bot" />
+        <Stat label={t('ov_needs_human')} value={num(o.needsHuman)} tone={o.needsHuman ? 'warn' : 'good'}
+              href="/inbox?filter=needs_human" />
+        <Stat label={t('ov_tasks')} value={num(o.pendingTasks)} tone={o.pendingTasks ? 'warn' : 'good'}
+              href="/followups" />
         <Stat label={t('ov_auto_rate')}
               value={o.autoRate != null ? `${o.autoRate.toFixed(0)}%` : '—'}
               sub={t('ov_auto_sub', { a: num(o.aiReplies), b: num(o.aiHandoffs) })} />

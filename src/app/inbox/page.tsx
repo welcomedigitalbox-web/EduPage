@@ -38,7 +38,7 @@ export default async function Inbox({
       </div>
 
       <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[44rem] text-sm">
           <thead className="text-muted">
             <tr className="border-b border-edge">
               <th className="p-3 text-left font-normal">{t('ib_customer')}</th>

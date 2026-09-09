@@ -317,6 +317,11 @@ const D: Dict = {
 
   // customers
   nav_customers: ['ဖောက်သည်များ', 'Customers'],
+  seg_leads: ['ဒီကာလအတွင်း လာဆက်သွယ်သူများ', 'People who messaged in this period'],
+  seg_engaged: ['စကားအဆင်ပြေသွားသူများ', 'People who became a real conversation'],
+  seg_no_convo: ['စကားမဖြစ်သွားသူများ', 'People who never became a conversation'],
+  seg_won: ['ရောင်းရသူများ', 'Customers won'],
+  seg_clear: ['← ဖောက်သည်အားလုံး ပြန်ကြည့်ရန်', '← Back to all customers'],
   cu_title: ['ဖောက်သည်များ', 'Customers'],
   cu_sub: ['Messenger ကနေရောက်လာသူတွေ — POS ရဲ့ တကယ့်ဝယ်ယူမှတ်တမ်းနဲ့ တွဲထားပါတယ်',
            'Everyone who came through Messenger, joined to their real POS purchase history'],

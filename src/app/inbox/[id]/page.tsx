@@ -34,8 +34,8 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
-      <div className="card flex h-[calc(100vh-3rem)] flex-col">
-        <div className="flex items-center justify-between border-b border-edge p-3">
+      <div className="card flex h-[70vh] flex-col lg:h-[calc(100vh-3rem)]">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-edge p-3">
           <div>
             <div className="font-medium">{c.name ?? `PSID ${c.psid.slice(-6)}`}</div>
             <div className="mt-1 flex items-center gap-2">
@@ -47,14 +47,14 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
             labels={{ bot: t('th_give_bot'), mine: t('th_take'), close: t('th_close') }} />
         </div>
 
-        <div className="flex-1 space-y-3 overflow-y-auto p-4">
+        <div className="flex-1 space-y-2 overflow-y-auto px-4 py-4">
           {messages.filter((m) => m.author !== 'system').map((m) => {
             const mine = m.direction === 'out';
             const bg = !mine ? 'bg-edge' : m.author === 'bot' ? 'bg-[#3987e5]/20' : 'bg-good/15';
             const ai = m.ai as Record<string, unknown> | null;
             return (
               <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[70%] rounded-xl px-3 py-2 text-sm ${bg}`}>
+                <div className={`max-w-[85%] break-words rounded-2xl px-3 py-2 text-sm sm:max-w-[70%] ${bg}`}>
                   <Attachments items={m.attachments as Attachment[] | null} label={t('th_attachment')} />
                   {m.text}
                   <div className="mt-1 text-[10px] text-muted">

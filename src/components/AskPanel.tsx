@@ -40,7 +40,7 @@ export function AskPanel({
   }
 
   return (
-    <div className="card flex h-[calc(100vh-9rem)] flex-col">
+    <div className="card flex h-[70vh] flex-col lg:h-[calc(100vh-9rem)]">
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {!turns.length && (
           <div className="space-y-2">

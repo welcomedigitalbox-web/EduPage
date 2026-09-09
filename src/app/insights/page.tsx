@@ -127,7 +127,7 @@ export default async function Insights({
 
       <section className="card overflow-x-auto">
         <div className="label p-3">{t('pi_post_table')}</div>
-        <table className="w-full min-w-[56rem] text-sm">
+        <table className="w-full min-w-[52rem] text-sm">
           <thead className="text-muted">
             <tr className="border-b border-edge">
               <SortHeader field="message" label={t('pi_post')} align="left"

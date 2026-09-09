@@ -164,8 +164,13 @@ export interface CustomerRow {
 }
 
 /** The customer list. Messenger identity on the left, real POS money on the right. */
+/** The overview tiles link here with a segment, so a number on the dashboard
+ *  can always be opened and checked name by name. */
+export type Segment = 'leads' | 'engaged' | 'no_convo' | 'won';
+
 export async function customerList(opts: {
   q?: string; stage?: string; source?: string; limit?: number;
+  segment?: string; since?: string; until?: string;
 }): Promise<CustomerRow[]> {
   const db = admin();
   let query = db
@@ -173,6 +178,15 @@ export async function customerList(opts: {
     .select('id,name,psid,phone,email,address,stage,tags,notes,source_type,source_ad_id,customer_id,first_seen_at,last_inbound_at')
     .order('last_inbound_at', { ascending: false, nullsFirst: false })
     .limit(opts.limit ?? 300);
+
+  if (opts.segment && opts.since && opts.until) {
+    const { from, to } = instants(opts.since, opts.until);
+    query = query.gte('first_seen_at', from).lte('first_seen_at', to);
+    // Same definitions the overview counts with, so the list and the tile agree.
+    if (opts.segment === 'engaged') query = query.neq('stage', 'new');
+    if (opts.segment === 'no_convo') query = query.eq('stage', 'new');
+    if (opts.segment === 'won') query = query.eq('stage', 'won');
+  }
 
   if (opts.stage) query = query.eq('stage', opts.stage);
   if (opts.source === 'ad') query = query.not('source_ad_id', 'is', null);
