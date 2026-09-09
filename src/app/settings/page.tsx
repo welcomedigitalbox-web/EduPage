@@ -6,6 +6,7 @@ import { KbPreview } from '@/components/KbPreview';
 import { UserManager } from '@/components/Users';
 import { FxRates } from '@/components/FxRates';
 import { PaymentChannels } from '@/components/PaymentChannels';
+import { ReceiptSettings } from '@/components/ReceiptSettings';
 import { paymentChannels } from '@/lib/orders';
 
 export const dynamic = 'force-dynamic';
@@ -81,6 +82,19 @@ export default async function Settings() {
           labels={{
             title: t('fx_title'), sub: t('fx_sub'), date: t('fx_date'), rate: t('fx_rate'),
             add: t('fx_add'), del: t('fx_del'), empty: t('fx_empty'), effective: t('fx_effective'),
+          }}
+        />
+      </section>
+
+      <section className="space-y-3 lg:col-span-2">
+        <ReceiptSettings
+          initial={settings}
+          labels={{
+            title: t('se_receipt'), sub: t('se_receipt_sub'),
+            name: t('se_receipt_name'), phone: t('se_receipt_phone'),
+            note: t('se_receipt_note'), footer: t('se_receipt_footer'),
+            footerPh: t('se_receipt_footer_ph'),
+            save: t('se_save'), saved: t('se_saved'),
           }}
         />
       </section>

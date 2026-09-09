@@ -9,6 +9,8 @@ import { OrderWorkflow } from '@/components/OrderWorkflow';
 import { OrderCard } from '@/components/OrderCard';
 import { canEdit } from '@/lib/order-workflow';
 import { admin } from '@/lib/supabase';
+import { getSettings } from '@/lib/crm';
+import { Receipt } from '@/components/Receipt';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,6 +88,7 @@ export default async function OrderPage({
   const role = session?.role ?? 'agent';
   const paymentStatus = (order.payment_status as string) ?? 'pending';
   const deliveryStatus = (order.delivery_status as string) ?? 'pending';
+  const settings = await getSettings();
   const { data: history } = await admin()
     .from('msgr_order_events')
     .select('id,track,from_state,to_state,actor_name,created_at')
@@ -131,6 +134,39 @@ export default async function OrderPage({
     order.note ? `${t('or2_note')}: ${order.note as string}` : null,
   ].filter((l) => l !== null).join('\n');
 
+  const receiptMoney: [string, string, boolean?][] = [
+    [t('or2_subtotal'), `${fmt(order.subtotal)} MMK`],
+    ...(Number(order.discount) > 0
+      ? [[t('or2_discount'), `−${fmt(order.discount)} MMK`] as [string, string]] : []),
+    ...(Number(order.delivery_fee) > 0
+      ? [[t('or2_delivery_fee'), `${fmt(order.delivery_fee)} MMK`] as [string, string]] : []),
+    [t('or2_grand_total'), `${fmt(order.grand_total)} MMK`, true],
+    ...(advance > 0
+      ? [[t('rc_paid'), `${fmt(advance)} MMK`] as [string, string],
+         [t('rc_due'), `${fmt(balance)} MMK`] as [string, string]]
+      : []),
+  ];
+
+  const receiptShop = settings.receipt_shop_name || settings.business_name;
+  const receiptText = [
+    receiptShop,
+    settings.receipt_phone || null,
+    settings.receipt_note || null,
+    '',
+    `${ref} · ${dateStr}`,
+    `${t('rc_to')}: ${order.customer_name as string}`,
+    order.phone ? `${order.phone as string}` : null,
+    order.delivery_address ? `${order.delivery_address as string}` : null,
+    '',
+    ...items.map((i) =>
+      `${fmt(i.qty)} × ${i.description as string} — ${fmt(i.line_total)}`),
+    '',
+    ...receiptMoney.map(([k, v]) => `${k}: ${v}`),
+    order.delivery_method ? `${t('or2_delivery_method')}: ${order.delivery_method as string}` : null,
+    '',
+    settings.receipt_footer || null,
+  ].filter((l) => l !== null).join('\n');
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -142,6 +178,35 @@ export default async function OrderPage({
           <p className="text-sm text-muted">{t(`os_${order.status}`)} · {dateStr}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Receipt
+            text={receiptText}
+            data={{
+              shopName: receiptShop,
+              phone: settings.receipt_phone,
+              note: settings.receipt_note,
+              footer: settings.receipt_footer,
+              ref, date: dateStr,
+              customer: order.customer_name as string,
+              customerPhone: (order.phone as string) ?? null,
+              address: (order.delivery_address as string) ?? null,
+              lines: items.map((i) => ({
+                qty: fmt(i.qty),
+                name: i.description as string,
+                price: fmt(i.unit_price),
+                total: fmt(i.line_total),
+              })),
+              money: receiptMoney,
+              deliveryMethod: (order.delivery_method as string) ?? null,
+              paymentMethod: t(`or2_${order.payment_method}`),
+            }}
+            labels={{
+              open: t('rc_open'), close: t('rc_close'),
+              copy: t('or2_copy'), copied: t('or2_copied'), print: t('or2_print'),
+              hint: t('rc_hint'), to: t('rc_to'), qty: t('rc_qty'),
+              item: t('rc_item'), amount: t('rc_amount'),
+              delivery: t('or2_delivery_method'), payment: t('or2_payment'),
+            }}
+          />
           <OrderCard
             ref_={ref}
             status={t(`os_${order.status}`)}
@@ -151,10 +216,13 @@ export default async function OrderPage({
             sections={[
               {
                 title: t('or2_card_items'),
+                // Quantity leads the line so it is never missing — a card that
+                // shows a price without a count is the thing people argue over.
                 rows: items.map((i) => [
-                  `${i.description as string}${Number(i.qty) > 1 ? ` ×${fmt(i.qty)}` : ''}`,
+                  `${fmt(i.qty)} × ${i.description as string}`,
                   `${fmt(i.line_total)}`,
-                ] as [string, string]),
+                  (i.barcode as string) || undefined,
+                ] as [string, string, string?]),
               },
               {
                 title: t('or2_card_customer'),
@@ -163,7 +231,7 @@ export default async function OrderPage({
                   [t('or2_phone'), (order.phone as string) ?? '—'],
                   order.delivery_address
                     ? [t('or2_address'), order.delivery_address as string] : null,
-                ].filter(Boolean)) as [string, string][],
+                ].filter(Boolean)) as [string, string, string?][],
               },
               {
                 title: t('or2_card_payment'),
@@ -176,14 +244,14 @@ export default async function OrderPage({
                   advance > 0 ? [t('or2_advance'), `${fmt(advance)} MMK`] : null,
                   advance > 0 ? [t('or2_final_payment'), `${fmt(balance)} MMK`] : null,
                   [t('or2_delivery_method'), (order.delivery_method as string) ?? '—'],
-                ].filter(Boolean)) as [string, string][],
+                ].filter(Boolean)) as [string, string, string?][],
               },
               {
                 title: t('or2_card_meta'),
                 rows: [
                   [t('or2_shop'), shop?.name ?? '—'],
                   [t('or2_created_by'), (order.created_by_name as string) ?? '—'],
-                ] as [string, string][],
+                ] as [string, string, string?][],
               },
             ]}
             labels={{
