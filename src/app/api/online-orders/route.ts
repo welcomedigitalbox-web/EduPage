@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { admin } from '@/lib/supabase';
 import { saveOrder, ORDER_STATUSES, type OrderInput } from '@/lib/orders';
+import { validateOrder, normalizePhone } from '@/lib/order-rules';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
 export const runtime = 'nodejs';
@@ -22,9 +23,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  if (!body.customer_name?.trim()) {
-    return NextResponse.json({ error: 'customer name is required' }, { status: 400 });
+  // The browser has already checked these; a request that reaches here with a
+  // broken total came from somewhere other than the form.
+  const bad = validateOrder({ ...body, items: body.items ?? [] });
+  const fields = Object.keys(bad);
+  if (fields.length) {
+    return NextResponse.json(
+      { error: `invalid order: ${fields.map((k) => `${k} (${bad[k as keyof typeof bad]})`).join(', ')}`,
+        fields: bad },
+      { status: 400 }
+    );
   }
+  body.phone = normalizePhone(body.phone);
 
   try {
     const id = await saveOrder(body, {

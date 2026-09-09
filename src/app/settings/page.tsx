@@ -5,6 +5,8 @@ import { ctx } from '@/lib/server-ctx';
 import { KbPreview } from '@/components/KbPreview';
 import { UserManager } from '@/components/Users';
 import { FxRates } from '@/components/FxRates';
+import { PaymentChannels } from '@/components/PaymentChannels';
+import { paymentChannels } from '@/lib/orders';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +21,7 @@ export default async function Settings() {
   ]);
   const { data: fx } = await admin()
     .from('msgr_fx_rates').select('date,mmk_per_usd,note').order('date', { ascending: false }).limit(90);
+  const channels = await paymentChannels({ all: true });
   const { data: users } = await admin()
     .from('msgr_users').select('id,email,name,role,is_active,last_login_at').order('created_at');
 
@@ -78,6 +81,21 @@ export default async function Settings() {
           labels={{
             title: t('fx_title'), sub: t('fx_sub'), date: t('fx_date'), rate: t('fx_rate'),
             add: t('fx_add'), del: t('fx_del'), empty: t('fx_empty'), effective: t('fx_effective'),
+          }}
+        />
+      </section>
+
+      <section className="space-y-3 lg:col-span-2">
+        <PaymentChannels
+          rows={channels as never}
+          labels={{
+            title: t('pc_title'), sub: t('pc_sub'), name: t('pc_name'), namePh: t('pc_name_ph'),
+            kind: t('pc_kind'), wallet: t('pc_wallet'), bank: t('pc_bank'), cash: t('pc_cash'),
+            accountName: t('pc_account_name'), accountNamePh: t('pc_account_name_ph'),
+            accountNo: t('pc_account_no'), accountNoPh: t('pc_account_no_ph'),
+            add: t('pc_add'), save: t('pc_save'), cancel: t('pc_cancel'), edit: t('pc_edit'),
+            del: t('pc_del'), enable: t('pc_enable'), disable: t('pc_disable'),
+            disabled: t('pc_disabled'), empty: t('pc_empty'), inUse: t('pc_in_use'),
           }}
         />
       </section>

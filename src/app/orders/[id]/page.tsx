@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { orderDetail, shops } from '@/lib/orders';
+import { orderDetail, shops, paymentChannels } from '@/lib/orders';
 import { ctx } from '@/lib/server-ctx';
 import { OrderForm } from '@/components/OrderForm';
 import { orderFormLabels } from '@/lib/order-labels';
@@ -19,7 +19,7 @@ export default async function OrderPage({
   const data = await orderDetail(id);
   if (!data) notFound();
   const { order, items } = data;
-  const list = await shops();
+  const [list, channels] = await Promise.all([shops(), paymentChannels()]);
 
   const ref = `EBH-${String(order.order_no).padStart(5, '0')}`;
   const fmt = (n: unknown) => Number(n ?? 0).toLocaleString();
@@ -33,6 +33,7 @@ export default async function OrderPage({
         </div>
         <OrderForm
           shops={list as { id: string; name: string; region: string | null }[]}
+          channels={channels as { id: string; name: string; kind: string }[]}
           orderId={id}
           contactId={order.contact_id as string | null}
           conversationId={order.conversation_id as string | null}
@@ -45,6 +46,8 @@ export default async function OrderPage({
             order_date: order.order_date as string,
             delivery_method: (order.delivery_method as string) ?? '',
             payment_method: order.payment_method as string,
+            payment_channel_id: (order.payment_channel_id as string) ?? '',
+            payment_ref: (order.payment_ref as string) ?? '',
             advance_payment: Number(order.advance_payment),
             delivery_fee: Number(order.delivery_fee),
             discount: Number(order.discount),
@@ -157,6 +160,17 @@ export default async function OrderPage({
             <div className="label">{t('or2_payment')}</div>
             <Row k={t('or2_payment')} v={t(`or2_${order.payment_method}`)} />
             <Row k={t('or2_advance')} v={`${fmt(order.advance_payment)} MMK`} />
+            {Number(order.advance_payment) > 0 && (
+              <>
+                <Row k={t('or2_channel')}
+                  v={(order.msgr_payment_channels as { name?: string } | null)?.name ?? '—'} />
+                {order.payment_ref ? (
+                  <Row k={t('or2_pay_ref')} v={order.payment_ref as string} />
+                ) : null}
+                <Row k={t('or2_cod_due')}
+                  v={`${fmt(Number(order.grand_total) - Number(order.advance_payment))} MMK`} />
+              </>
+            )}
             <Row k={t('or2_delivery_method')} v={(order.delivery_method as string) ?? '—'} />
             <Row k={t('or2_created_by')} v={(order.created_by_name as string) ?? '—'} />
           </div>

@@ -1,9 +1,14 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  validateOrder, orderMoney, requiredAdvance, normalizePhone,
+  type FieldKey,
+} from '@/lib/order-rules';
 
 const INPUT =
   'w-full rounded-lg border border-edge bg-ink p-2 text-sm outline-none focus:border-brand';
+const BAD = 'border-bad focus:border-bad';
 
 export interface Line {
   barcode: string; description: string; unit_price: number | ''; qty: number | '';
@@ -14,20 +19,24 @@ export interface OrderFormLabels {
   shop: string; pickShop: string; items: string; barcode: string; description: string;
   unitPrice: string; qty: string; lineTotal: string; addLine: string; removeLine: string;
   money: string; subtotal: string; discount: string; deliveryFee: string; grandTotal: string;
-  payment: string; cod: string; transfer: string; prepaid: string; advance: string;
+  payment: string; cod: string; deposit: string; transfer: string; advance: string;
+  codDue: string; fixFirst: string; channel: string; pickChannel: string;
+  payRef: string; payRefPh: string;
   deliveryMethod: string; deliveryPh: string; orderDate: string; status: string;
-  note: string; notePh: string; save: string; saving: string; failed: string; nameRequired: string;
+  note: string; notePh: string; save: string; saving: string; failed: string;
+  errors: Record<string, string>;
   statuses: Record<string, string>;
 }
 
 export function OrderForm({
-  shops, initial, contactId, conversationId, orderId, labels,
+  shops, channels, initial, contactId, conversationId, orderId, labels,
 }: {
   shops: { id: string; name: string; region: string | null }[];
+  channels: { id: string; name: string; kind: string }[];
   initial: Partial<{
     customer_name: string; phone: string; city: string; delivery_address: string;
     shop_id: string; order_date: string; delivery_method: string; payment_method: string;
-    advance_payment: number; delivery_fee: number; discount: number; status: string;
+    payment_channel_id: string; payment_ref: string; advance_payment: number; delivery_fee: number; discount: number; status: string;
     note: string; items: Line[];
   }>;
   contactId?: string | null;
@@ -47,6 +56,8 @@ export function OrderForm({
     order_date: initial.order_date ?? today,
     delivery_method: initial.delivery_method ?? '',
     payment_method: initial.payment_method ?? 'cod',
+    payment_channel_id: initial.payment_channel_id ?? '',
+    payment_ref: initial.payment_ref ?? '',
     advance_payment: initial.advance_payment ?? 0,
     delivery_fee: initial.delivery_fee ?? 0,
     discount: initial.discount ?? 0,
@@ -60,6 +71,9 @@ export function OrderForm({
   );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Errors stay hidden until the first save attempt: flagging an empty form
+  // the moment it opens is noise, not help.
+  const [touched, setTouched] = useState(false);
 
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) =>
     setF((p) => ({ ...p, [k]: v }));
@@ -67,23 +81,47 @@ export function OrderForm({
   const setLine = (i: number, patch: Partial<Line>) =>
     setLines((p) => p.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
 
-  const money = useMemo(() => {
-    const subtotal = lines.reduce(
-      (a, l) => a + Number(l.unit_price || 0) * Number(l.qty || 0), 0
-    );
-    const grand = Math.max(0, subtotal - Number(f.discount || 0) + Number(f.delivery_fee || 0));
-    return { subtotal, grand };
-  }, [lines, f.discount, f.delivery_fee]);
+  const money = useMemo(
+    () => orderMoney({ items: lines, discount: f.discount, delivery_fee: f.delivery_fee,
+                       advance_payment: f.advance_payment }),
+    [lines, f.discount, f.delivery_fee, f.advance_payment]
+  );
+
+  const errs = useMemo(
+    () => validateOrder({ ...f, items: lines }),
+    [f, lines]
+  );
+  const show = (k: FieldKey) =>
+    touched && errs[k] ? labels.errors[errs[k]!] ?? errs[k]! : null;
 
   const fmt = (n: number) => n.toLocaleString();
 
+  /** Picking a method fills in the advance it implies, so the common cases
+   *  never trip the validation at all. */
+  function pickPayment(method: string) {
+    const need = requiredAdvance(method, money.grand_total);
+    setF((p) => {
+      const advance = need !== null ? need : p.advance_payment;
+      return {
+        ...p, payment_method: method, advance_payment: advance,
+        // COD takes no money up front, so a wallet on the order would be a lie.
+        payment_channel_id: advance > 0 ? p.payment_channel_id : '',
+        payment_ref: advance > 0 ? p.payment_ref : '',
+      };
+    });
+  }
+
+  const advanceLocked = f.payment_method !== 'deposit';
+
   async function save() {
-    if (!f.customer_name.trim()) { setErr(labels.nameRequired); return; }
+    setTouched(true);
+    if (Object.keys(errs).length) { setErr(labels.fixFirst); return; }
     setBusy(true); setErr(null);
     const res = await fetch('/api/online-orders', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         ...f,
+        phone: normalizePhone(f.phone),
         id: orderId,
         contact_id: contactId ?? null,
         conversation_id: conversationId ?? null,
@@ -111,20 +149,23 @@ export function OrderForm({
       <section className="card space-y-3 p-4">
         <div className="label">{labels.customer}</div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={labels.name}>
-            <input className={INPUT} value={f.customer_name}
+          <Field label={labels.name} err={show('customer_name')}>
+            <input className={`${INPUT} ${show('customer_name') ? BAD : ''}`}
+              value={f.customer_name}
               onChange={(e) => set('customer_name', e.target.value)} />
           </Field>
-          <Field label={labels.phone}>
-            <input className={INPUT} value={f.phone}
-              onChange={(e) => set('phone', e.target.value)} />
+          <Field label={labels.phone} err={show('phone')}>
+            <input className={`${INPUT} ${show('phone') ? BAD : ''}`}
+              inputMode="tel" placeholder="09xxxxxxxxx" value={f.phone}
+              onChange={(e) => set('phone', e.target.value)}
+              onBlur={() => set('phone', normalizePhone(f.phone))} />
           </Field>
           <Field label={labels.city}>
             <input className={INPUT} value={f.city}
               onChange={(e) => set('city', e.target.value)} />
           </Field>
-          <Field label={labels.shop}>
-            <select className={INPUT} value={f.shop_id}
+          <Field label={labels.shop} err={show('shop_id')}>
+            <select className={`${INPUT} ${show('shop_id') ? BAD : ''}`} value={f.shop_id}
               onChange={(e) => set('shop_id', e.target.value)}>
               <option value="">{labels.pickShop}</option>
               {shops.map((s) => (
@@ -152,11 +193,11 @@ export function OrderForm({
                 onChange={(e) => setLine(i, { barcode: e.target.value })} />
               <input className={INPUT} placeholder={labels.description} value={l.description}
                 onChange={(e) => setLine(i, { description: e.target.value })} />
-              <input className={INPUT} type="number" inputMode="decimal" placeholder={labels.unitPrice}
-                value={l.unit_price}
+              <input className={INPUT} type="number" min={0} step="any" inputMode="decimal"
+                placeholder={labels.unitPrice} value={l.unit_price}
                 onChange={(e) => setLine(i, { unit_price: e.target.value === '' ? '' : Number(e.target.value) })} />
-              <input className={INPUT} type="number" inputMode="decimal" placeholder={labels.qty}
-                value={l.qty}
+              <input className={INPUT} type="number" min={0} step="any" inputMode="decimal"
+                placeholder={labels.qty} value={l.qty}
                 onChange={(e) => setLine(i, { qty: e.target.value === '' ? '' : Number(e.target.value) })} />
               <div className="flex items-center justify-end px-2 text-sm tabular-nums text-muted">
                 {fmt(Number(l.unit_price || 0) * Number(l.qty || 0))}
@@ -171,6 +212,7 @@ export function OrderForm({
           onClick={() => setLines((p) => [...p, { barcode: '', description: '', unit_price: '', qty: 1 }])}>
           + {labels.addLine}
         </button>
+        {show('items') && <p className="mt-2 text-xs text-bad">{show('items')}</p>}
       </section>
 
       {/* money + delivery */}
@@ -179,19 +221,27 @@ export function OrderForm({
           <div className="label">{labels.money}</div>
           <Row k={labels.subtotal} v={fmt(money.subtotal)} />
           <div className="grid grid-cols-2 gap-3">
-            <Field label={labels.discount}>
-              <input className={INPUT} type="number" inputMode="decimal" value={f.discount}
+            <Field label={labels.discount} err={show('discount')}>
+              <input className={`${INPUT} ${show('discount') ? BAD : ''}`} type="number"
+                min={0} step="any" inputMode="decimal" value={f.discount}
                 onChange={(e) => set('discount', Number(e.target.value))} />
             </Field>
-            <Field label={labels.deliveryFee}>
-              <input className={INPUT} type="number" inputMode="decimal" value={f.delivery_fee}
+            <Field label={labels.deliveryFee} err={show('delivery_fee')}>
+              <input className={`${INPUT} ${show('delivery_fee') ? BAD : ''}`} type="number"
+                min={0} step="any" inputMode="decimal" value={f.delivery_fee}
                 onChange={(e) => set('delivery_fee', Number(e.target.value))} />
             </Field>
           </div>
           <div className="flex items-baseline justify-between border-t border-edge pt-3">
             <span className="text-sm">{labels.grandTotal}</span>
-            <span className="text-xl font-semibold tabular-nums">{fmt(money.grand)} MMK</span>
+            <span className="text-xl font-semibold tabular-nums">{fmt(money.grand_total)} MMK</span>
           </div>
+          {money.advance > 0 && (
+            <div className="flex items-baseline justify-between text-sm text-muted">
+              <span>{labels.codDue}</span>
+              <span className="tabular-nums">{fmt(money.cod_due)} MMK</span>
+            </div>
+          )}
         </section>
 
         <section className="card space-y-3 p-4">
@@ -199,25 +249,50 @@ export function OrderForm({
           <div className="grid grid-cols-2 gap-3">
             <Field label={labels.payment}>
               <select className={INPUT} value={f.payment_method}
-                onChange={(e) => set('payment_method', e.target.value)}>
+                onChange={(e) => pickPayment(e.target.value)}>
                 <option value="cod">{labels.cod}</option>
+                <option value="deposit">{labels.deposit}</option>
                 <option value="transfer">{labels.transfer}</option>
-                <option value="prepaid">{labels.prepaid}</option>
               </select>
             </Field>
-            <Field label={labels.advance}>
-              <input className={INPUT} type="number" inputMode="decimal" value={f.advance_payment}
+            <Field label={labels.advance} err={show('advance_payment')}>
+              <input
+                className={`${INPUT} ${show('advance_payment') ? BAD : ''} ${advanceLocked ? 'opacity-60' : ''}`}
+                type="number" min={0} step="any" inputMode="decimal"
+                readOnly={advanceLocked}
+                value={f.advance_payment}
                 onChange={(e) => set('advance_payment', Number(e.target.value))} />
             </Field>
             <Field label={labels.deliveryMethod}>
               <input className={INPUT} placeholder={labels.deliveryPh} value={f.delivery_method}
                 onChange={(e) => set('delivery_method', e.target.value)} />
             </Field>
-            <Field label={labels.orderDate}>
-              <input className={INPUT} type="date" value={f.order_date}
+            <Field label={labels.orderDate} err={show('order_date')}>
+              <input className={`${INPUT} ${show('order_date') ? BAD : ''}`} type="date"
+                max={today} value={f.order_date}
                 onChange={(e) => set('order_date', e.target.value)} />
             </Field>
           </div>
+          {money.advance > 0 && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={labels.channel} err={show('payment_channel_id')}>
+                <select
+                  className={`${INPUT} ${show('payment_channel_id') ? BAD : ''}`}
+                  value={f.payment_channel_id}
+                  onChange={(e) => set('payment_channel_id', e.target.value)}>
+                  <option value="">{labels.pickChannel}</option>
+                  {channels.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={labels.payRef}>
+                <input className={INPUT} placeholder={labels.payRefPh} value={f.payment_ref}
+                  onChange={(e) => set('payment_ref', e.target.value)} />
+              </Field>
+            </div>
+          )}
+
           <Field label={labels.status}>
             <select className={INPUT} value={f.status}
               onChange={(e) => set('status', e.target.value)}>
@@ -243,11 +318,14 @@ export function OrderForm({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, err, children }: {
+  label: string; err?: string | null; children: React.ReactNode;
+}) {
   return (
     <label className="block">
       <span className="mb-1 block text-[11px] text-muted">{label}</span>
       {children}
+      {err && <span className="mt-1 block text-[11px] text-bad">{err}</span>}
     </label>
   );
 }

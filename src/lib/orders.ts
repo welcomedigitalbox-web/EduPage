@@ -21,6 +21,8 @@ export interface OrderInput {
   order_date?: string;
   delivery_method?: string | null;
   payment_method?: string;
+  payment_channel_id?: string | null;
+  payment_ref?: string | null;
   advance_payment?: number;
   delivery_fee?: number;
   discount?: number;
@@ -81,6 +83,8 @@ export async function saveOrder(
     order_date: input.order_date || undefined,
     delivery_method: input.delivery_method?.trim() || null,
     payment_method: input.payment_method || 'cod',
+    payment_channel_id: input.payment_channel_id || null,
+    payment_ref: input.payment_ref?.trim() || null,
     advance_payment: Number(input.advance_payment || 0),
     delivery_fee: Number(input.delivery_fee || 0),
     discount: Number(input.discount || 0),
@@ -143,6 +147,15 @@ export async function shops() {
   return data ?? [];
 }
 
+export async function paymentChannels(opts: { all?: boolean } = {}) {
+  let q = admin()
+    .from('msgr_payment_channels').select('id,name,kind,account_name,account_no,is_active')
+    .order('sort_order').order('name');
+  if (!opts.all) q = q.eq('is_active', true);
+  const { data } = await q;
+  return data ?? [];
+}
+
 export async function orderList(opts: {
   status?: string; q?: string; since?: string; until?: string; limit?: number;
 }) {
@@ -165,7 +178,9 @@ export async function orderList(opts: {
 export async function orderDetail(id: string) {
   const db = admin();
   const { data: order } = await db
-    .from('msgr_orders').select('*, msgr_shops(name,region)').eq('id', id).maybeSingle();
+    .from('msgr_orders')
+    .select('*, msgr_shops(name,region), msgr_payment_channels(name,kind)')
+    .eq('id', id).maybeSingle();
   if (!order) return null;
   const { data: items } = await db
     .from('msgr_order_items').select('*').eq('order_id', id).order('sort_order');
