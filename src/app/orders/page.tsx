@@ -117,7 +117,46 @@ export default async function Orders({
         {!sp.q && <span className="ml-2 text-xs">{r.since} → {r.until}</span>}
       </div>
 
-      <div className="card overflow-x-auto">
+      {/* Phones get one block per order; the nine-column table starts at md. */}
+      <ul className="space-y-2 md:hidden">
+        {rows.map((o) => {
+          const shop = (o.msgr_shops as { name?: string } | null)?.name;
+          const advance = Number(o.advance_payment ?? 0);
+          return (
+            <li key={o.id as string}>
+              <Link href={`/orders/${o.id}`}
+                className="card block space-y-1 p-3 hover:border-brand">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-medium">EBH-{String(o.order_no).padStart(5, '0')}</span>
+                  <span className="tabular-nums">{money(Number(o.grand_total))}</span>
+                </div>
+                <div className="flex items-baseline justify-between gap-2 text-sm">
+                  <span>{o.customer_name as string}</span>
+                  <span className="text-xs text-muted">{(o.phone as string) ?? '—'}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
+                  <span className={`rounded border px-1.5 py-0.5 ${STATUS_TONE[o.status as string] ?? 'border-edge'}`}>
+                    {t(`os_${o.status}`)}
+                  </span>
+                  <span>{shop ?? '—'}</span>
+                  <span>{t(`or2_${o.payment_method}`)}{advance > 0 ? ` · ${advance.toLocaleString()}` : ''}</span>
+                  <span className="ml-auto">
+                    {new Date(`${o.order_date}T00:00:00`).toLocaleDateString(lang === 'en' ? 'en-GB' : 'my-MM')}
+                  </span>
+                </div>
+                <div className="text-[11px] text-muted">
+                  {(o.created_by_name as string) || t('or2_bot_created')}
+                </div>
+              </Link>
+            </li>
+          );
+        })}
+        {!rows.length && (
+          <li className="card p-8 text-center text-muted">{t('or2_none')}</li>
+        )}
+      </ul>
+
+      <div className="card hidden overflow-x-auto md:block">
         <table className="w-full min-w-[60rem] text-sm">
           <thead className="text-muted">
             <tr className="border-b border-edge">

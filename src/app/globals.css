@@ -20,3 +20,11 @@ html, body {
 .label { @apply text-xs uppercase tracking-wide text-muted; }
 .btn { @apply rounded-lg px-3 py-1.5 text-sm border border-edge bg-panel hover:border-brand transition; }
 .btn-primary { @apply rounded-lg px-3 py-1.5 text-sm bg-brand text-white hover:opacity-90 transition; }
+
+/* Printing an order should give a plain sheet, not the dark app chrome. */
+@media print {
+  body { background: #fff !important; color: #000 !important; }
+  aside, nav, header.app-header { display: none !important; }
+  .card { border-color: #ccc !important; background: #fff !important; break-inside: avoid; }
+  .text-muted { color: #555 !important; }
+}
