@@ -28,13 +28,19 @@ export async function overview(since: string, until: string) {
   const db = admin();
   const { from: fromIso, to: toIso } = instants(since, until);
 
-  const [contacts, engaged, orders, spendRes, needsHuman, botHandled, pendingTasks, aiRuns,
-         noConvoRes] =
+  const [contacts, convoRows, orders, spendRes, needsHuman, botHandled, pendingTasks, aiRuns] =
     await Promise.all([
       db.from('msgr_contacts').select('id', { count: 'exact', head: true })
         .gte('first_seen_at', fromIso).lte('first_seen_at', toIso),
-      db.from('msgr_contacts').select('id', { count: 'exact', head: true })
-        .gte('first_seen_at', fromIso).lte('first_seen_at', toIso).neq('stage', 'new'),
+      // "Engaged" and "never a conversation" are about how many times the
+      // customer wrote, not what stage the AI put them in — someone can send
+      // five messages and still sit at stage "new" if the bot never classified
+      // them. Count the messages.
+      db.from('msgr_conversations')
+        .select('contact_id,inbound_count,msgr_contacts!inner(first_seen_at)')
+        .gte('msgr_contacts.first_seen_at', fromIso)
+        .lte('msgr_contacts.first_seen_at', toIso)
+        .limit(20000),
       db.from('v_msgr_sales').select('total,total_usd')
         .gte('created_at', fromIso).lte('created_at', toIso),
       db.from('msgr_ad_daily').select('spend').gte('date', since).lte('date', until),
@@ -43,9 +49,6 @@ export async function overview(since: string, until: string) {
       db.from('msgr_follow_ups').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       db.from('msgr_ai_runs').select('action')
         .gte('created_at', fromIso).lte('created_at', toIso).limit(10000),
-      // "conversation မဖြစ်သွားတဲ့သူ" — messaged once in this window, then silence
-      db.from('msgr_contacts').select('id', { count: 'exact', head: true })
-        .gte('first_seen_at', fromIso).lte('first_seen_at', toIso).eq('stage', 'new'),
     ]);
 
   const revenue = (orders.data ?? []).reduce((s, o) => s + Number(o.total), 0);
@@ -57,12 +60,16 @@ export async function overview(since: string, until: string) {
   const runs = aiRuns.data ?? [];
   const handoffs = runs.filter((r) => r.action === 'handoff').length;
 
-  const noConvo = noConvoRes.count;
+  // One inbound message and nothing after it is someone who never became a
+  // conversation; two or more is a real exchange.
+  const convos = (convoRows.data ?? []) as { inbound_count: number }[];
+  const engagedCount = convos.filter((c) => Number(c.inbound_count) > 1).length;
+  const noConvo = convos.filter((c) => Number(c.inbound_count) <= 1).length;
 
   return {
     leads,
-    engaged: engaged.count ?? 0,
-    noConvo: noConvo ?? 0,
+    engaged: engagedCount,
+    noConvo,
     orders: orderCount,
     revenue,
     spend,
@@ -182,10 +189,27 @@ export async function customerList(opts: {
   if (opts.segment && opts.since && opts.until) {
     const { from, to } = instants(opts.since, opts.until);
     query = query.gte('first_seen_at', from).lte('first_seen_at', to);
-    // Same definitions the overview counts with, so the list and the tile agree.
-    if (opts.segment === 'engaged') query = query.neq('stage', 'new');
-    if (opts.segment === 'no_convo') query = query.eq('stage', 'new');
     if (opts.segment === 'won') query = query.eq('stage', 'won');
+
+    // "Engaged" and "never a conversation" are counted from how many messages
+    // the customer sent, exactly as the overview tile counts them — so pull
+    // the matching contact ids first and filter to those.
+    if (opts.segment === 'engaged' || opts.segment === 'no_convo') {
+      const { data: convos } = await db
+        .from('msgr_conversations')
+        .select('contact_id,inbound_count,msgr_contacts!inner(first_seen_at)')
+        .gte('msgr_contacts.first_seen_at', from)
+        .lte('msgr_contacts.first_seen_at', to)
+        .limit(20000);
+      const want = opts.segment === 'engaged'
+        ? (n: number) => n > 1
+        : (n: number) => n <= 1;
+      const ids = (convos ?? [])
+        .filter((c) => want(Number(c.inbound_count)))
+        .map((c) => c.contact_id as string);
+      if (!ids.length) return [];
+      query = query.in('id', ids.slice(0, 1000));
+    }
   }
 
   if (opts.stage) query = query.eq('stage', opts.stage);
