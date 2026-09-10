@@ -19,7 +19,8 @@ export interface OrderFormLabels {
   shop: string; pickShop: string; items: string; barcode: string; description: string;
   unitPrice: string; qty: string; lineTotal: string; addLine: string; removeLine: string;
   money: string; subtotal: string; discount: string; deliveryFee: string; grandTotal: string;
-  payment: string; cod: string; deposit: string; transfer: string; advance: string;
+  payment: string; pendingPay: string; cod: string; deposit: string; transfer: string;
+  advance: string;
   codDue: string; fixFirst: string; channel: string; pickChannel: string;
   payRef: string; payRefPh: string;
   slip: string; slipAdd: string; slipView: string; slipRemove: string; uploading: string;
@@ -275,6 +276,7 @@ export function OrderForm({
             <Field label={labels.payment}>
               <select className={INPUT} value={f.payment_method}
                 onChange={(e) => pickPayment(e.target.value)}>
+                <option value="pending">{labels.pendingPay}</option>
                 <option value="cod">{labels.cod}</option>
                 <option value="deposit">{labels.deposit}</option>
                 <option value="transfer">{labels.transfer}</option>

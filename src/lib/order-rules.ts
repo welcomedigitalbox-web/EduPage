@@ -2,7 +2,9 @@
  *  both the form and the API route, because a rule that only the browser
  *  enforces is not a rule. */
 
-export const PAYMENT_METHODS = ['cod', 'deposit', 'transfer'] as const;
+// 'pending' is for an order taken before the customer has said how they will
+// pay — it takes no money, so it behaves like COD until someone changes it.
+export const PAYMENT_METHODS = ['pending', 'cod', 'deposit', 'transfer'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export interface RuleLine {
@@ -53,7 +55,7 @@ export function orderMoney(input: RuleInput) {
 /** What the advance *must* be for a given payment method, or null when the
  *  method leaves it up to the person taking the order. */
 export function requiredAdvance(method: string, grand_total: number): number | null {
-  if (method === 'cod') return 0;
+  if (method === 'pending' || method === 'cod') return 0;
   if (method === 'transfer') return grand_total;
   return null;                                // deposit: any partial amount
 }
@@ -87,7 +89,7 @@ export function validateOrder(input: RuleInput): Partial<Record<FieldKey, string
   if (m.advance < 0) e.advance_payment = 'negative';
   else if (m.advance > m.grand_total) e.advance_payment = 'over_total';
   else if (need !== null && Math.abs(m.advance - need) > 0.005) {
-    e.advance_payment = method === 'cod' ? 'cod_no_advance' : 'transfer_full';
+    e.advance_payment = method === 'transfer' ? 'transfer_full' : 'cod_no_advance';
   } else if (need === null && m.advance <= 0) {
     e.advance_payment = 'deposit_required';
   }

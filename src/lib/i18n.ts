@@ -245,6 +245,7 @@ const D: Dict = {
   or2_delivery_fee: ['ပို့ခ', 'Delivery fee'],
   or2_grand_total: ['စုစုပေါင်း ကျသင့်ငွေ', 'Grand total'],
   or2_payment: ['ငွေပေးချေမှု', 'Payment'],
+  or2_pending: ['မဆုံးဖြတ်ရသေး', 'Not decided yet'],
   or2_cod: ['COD (ပစ္စည်းရောက်မှ)', 'Cash on delivery'],
   or2_transfer: ['ငွေလွှဲ', 'Bank transfer'],
   or2_prepaid: ['ကြိုပေးပြီး', 'Paid in advance'],
