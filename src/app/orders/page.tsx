@@ -46,7 +46,7 @@ export default async function Orders({
   ]);
 
   const statuses = ['pending', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled'];
-  const payTerms = ['cod', 'deposit', 'transfer'];
+  const payTerms = ['pending', 'cod', 'deposit', 'transfer'];
 
   // Cancelled orders are shown but never counted — a cancelled sale is not a sale.
   const live = rows.filter((o) => o.status !== 'cancelled');
