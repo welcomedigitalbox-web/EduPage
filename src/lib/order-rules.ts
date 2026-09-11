@@ -18,6 +18,8 @@ export interface RuleInput {
   order_date?: string;
   payment_method?: string;
   payment_channel_id?: string | null;
+  payment_slip_url?: string | null;
+  sales_person_id?: string | null;
   advance_payment?: number;
   discount?: number;
   delivery_fee?: number;
@@ -62,7 +64,8 @@ export function requiredAdvance(method: string, grand_total: number): number | n
 
 export type FieldKey =
   | 'customer_name' | 'phone' | 'shop_id' | 'order_date'
-  | 'items' | 'discount' | 'delivery_fee' | 'advance_payment' | 'payment_channel_id';
+  | 'items' | 'discount' | 'delivery_fee' | 'advance_payment' | 'payment_channel_id'
+  | 'payment_slip_url' | 'sales_person_id';
 
 /** Returns a message key per offending field. The caller maps keys to text so
  *  the same rules can speak Burmese in the form and English in the log. */
@@ -97,6 +100,11 @@ export function validateOrder(input: RuleInput): Partial<Record<FieldKey, string
   // Money that has already arrived came through *something*, and finance
   // cannot reconcile a deposit that names no wallet.
   if (m.advance > 0 && !input.payment_channel_id) e.payment_channel_id = 'channel_required';
+  // Money that arrived by transfer has a slip. Without it nobody can prove the
+  // transfer happened, and "the customer said they sent it" is not proof.
+  if (m.advance > 0 && !input.payment_slip_url) e.payment_slip_url = 'slip_required';
+
+  if (!input.sales_person_id) e.sales_person_id = 'seller_required';
 
   if (input.order_date) {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Yangon' });

@@ -24,6 +24,7 @@ export interface OrderInput {
   payment_channel_id?: string | null;
   payment_ref?: string | null;
   payment_slip_url?: string | null;
+  sales_person_id?: string | null;
   advance_payment?: number;
   delivery_fee?: number;
   discount?: number;
@@ -69,6 +70,15 @@ export async function saveOrder(
     }));
   if (!items.length) throw new Error('an order needs at least one line');
 
+  // Copy the seller's name onto the order: the list they came from is editable,
+  // and an order from last year must still say who sold it.
+  let sellerName: string | null = null;
+  if (input.sales_person_id) {
+    const { data: sp } = await db.from('msgr_sales_people')
+      .select('name').eq('id', input.sales_person_id).maybeSingle();
+    sellerName = (sp?.name as string) ?? null;
+  }
+
   const { subtotal, grand_total } = totals({
     items, discount: input.discount, delivery_fee: input.delivery_fee,
   });
@@ -87,6 +97,8 @@ export async function saveOrder(
     payment_channel_id: input.payment_channel_id || null,
     payment_ref: input.payment_ref?.trim() || null,
     payment_slip_url: input.payment_slip_url?.trim() || null,
+    sales_person_id: input.sales_person_id || null,
+    sales_person_name: sellerName,
     advance_payment: Number(input.advance_payment || 0),
     delivery_fee: Number(input.delivery_fee || 0),
     discount: Number(input.discount || 0),
@@ -149,6 +161,15 @@ export async function shops() {
   return data ?? [];
 }
 
+export async function salesPeople(opts: { all?: boolean } = {}) {
+  let q = admin()
+    .from('msgr_sales_people').select('id,name,phone,shop_id,is_active')
+    .order('sort_order').order('name');
+  if (!opts.all) q = q.eq('is_active', true);
+  const { data } = await q;
+  return data ?? [];
+}
+
 export async function paymentChannels(opts: { all?: boolean } = {}) {
   let q = admin()
     .from('msgr_payment_channels').select('id,name,kind,account_name,account_no,is_active')
@@ -177,6 +198,7 @@ export async function contactOrders(contactId: string) {
 export async function orderList(opts: {
   status?: string; q?: string; since?: string; until?: string; limit?: number;
   shop_id?: string; created_by?: string; payment_method?: string; payment_channel_id?: string;
+  seller?: string;
 }) {
   let q = admin()
     .from('msgr_orders')
@@ -189,6 +211,7 @@ export async function orderList(opts: {
   if (opts.created_by) q = q.eq('created_by', opts.created_by);
   if (opts.payment_method) q = q.eq('payment_method', opts.payment_method);
   if (opts.payment_channel_id) q = q.eq('payment_channel_id', opts.payment_channel_id);
+  if (opts.seller) q = q.eq('sales_person_id', opts.seller);
   if (opts.since) q = q.gte('order_date', opts.since);
   if (opts.until) q = q.lte('order_date', opts.until);
   if (opts.q?.trim()) {

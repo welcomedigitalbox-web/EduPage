@@ -146,12 +146,16 @@ export async function fetchAdInsights(since: string, until: string): Promise<AdI
   return rows;
 }
 
-/** Meta reports "messaging conversations started" inside the actions array. */
+/**
+ * Meta reports "messaging conversations started" inside the actions array, and
+ * ships several look-alike action types alongside it. They are NOT
+ * interchangeable — `total_messaging_connection` counts every connection,
+ * including people coming back to an existing thread — so the specific one is
+ * looked up by name rather than taking whichever appears first in the array.
+ */
 export function messagingConversations(row: AdInsightRow): number {
-  const hit = row.actions?.find(
-    (a) =>
-      a.action_type === 'onsite_conversion.messaging_conversation_started_7d' ||
-      a.action_type === 'onsite_conversion.total_messaging_connection'
-  );
-  return hit ? Number(hit.value) || 0 : 0;
+  const byType = (type: string) =>
+    Number(row.actions?.find((a) => a.action_type === type)?.value) || 0;
+  return byType('onsite_conversion.messaging_conversation_started_7d')
+    || byType('onsite_conversion.total_messaging_connection');
 }
