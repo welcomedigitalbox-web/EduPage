@@ -60,11 +60,9 @@ export default async function Overview({
         />
       </header>
 
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Stat label={t('ov_messaged')} value={num(o.messaged)}
-              sub={t('ov_messaged_sub', { a: num(o.messagedAds), o: num(o.messagedOrganic) })}
-              delta={d((x) => x.messaged)} />
-        <Stat label={t('ov_leads')} value={num(o.leads)} sub={t('ov_leads_sub')}
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label={t('ov_leads')} value={num(o.leads)}
+              sub={t('ov_leads_sub', { a: num(o.leadsAds), o: num(o.leadsOrganic) })}
               delta={d((x) => x.leads)} href={seg('leads')} />
         <Stat label={t('ov_engaged')} value={num(o.engaged)} sub={t('ov_engaged_sub')}
               delta={d((x) => x.engaged)} href={seg('engaged')} />
