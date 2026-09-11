@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { shops, paymentChannels } from '@/lib/orders';
+import { shops, paymentChannels, salesPeople } from '@/lib/orders';
 import { admin } from '@/lib/supabase';
 import { ctx } from '@/lib/server-ctx';
 import { OrderForm, type Line } from '@/components/OrderForm';
@@ -16,7 +16,7 @@ export default async function NewOrder({
 }: { searchParams: Promise<{ contact?: string; convo?: string }> }) {
   const { t } = await ctx();
   const sp = await searchParams;
-  const [list, channels] = await Promise.all([shops(), paymentChannels()]);
+  const [list, channels, sellers] = await Promise.all([shops(), paymentChannels(), salesPeople()]);
 
   // Coming from a chat: carry the customer over, and the basket the bot pulled
   // out of the conversation, so staff are not retyping what was already said.
@@ -58,6 +58,7 @@ export default async function NewOrder({
       <OrderForm
         shops={list as { id: string; name: string; region: string | null }[]}
         channels={channels as { id: string; name: string; kind: string }[]}
+        sellers={sellers as { id: string; name: string }[]}
         initial={initial}
         contactId={sp.contact ?? null}
         conversationId={sp.convo ?? null}

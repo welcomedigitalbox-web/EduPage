@@ -8,6 +8,8 @@ import { FxRates } from '@/components/FxRates';
 import { PaymentChannels } from '@/components/PaymentChannels';
 import { ReceiptSettings } from '@/components/ReceiptSettings';
 import { PageConnect } from '@/components/PageConnect';
+import { SalesPeople } from '@/components/SalesPeople';
+import { salesPeople, shops as fulfilmentShops } from '@/lib/orders';
 import { paymentChannels } from '@/lib/orders';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +25,9 @@ export default async function Settings() {
   ]);
   const { data: fx } = await admin()
     .from('msgr_fx_rates').select('date,mmk_per_usd,note').order('date', { ascending: false }).limit(90);
-  const channels = await paymentChannels({ all: true });
+  const [channels, sellers, shopList] = await Promise.all([
+    paymentChannels({ all: true }), salesPeople({ all: true }), fulfilmentShops(),
+  ]);
   const { data: users } = await admin()
     .from('msgr_users').select('id,email,name,role,is_active,last_login_at').order('created_at');
 
@@ -110,6 +114,21 @@ export default async function Settings() {
           labels={{
             title: t('fx_title'), sub: t('fx_sub'), date: t('fx_date'), rate: t('fx_rate'),
             add: t('fx_add'), del: t('fx_del'), empty: t('fx_empty'), effective: t('fx_effective'),
+          }}
+        />
+      </section>
+
+      <section className="space-y-3 lg:col-span-2">
+        <SalesPeople
+          rows={sellers as never}
+          shops={shopList as { id: string; name: string }[]}
+          labels={{
+            title: t('sp_title'), sub: t('sp_sub'), namePh: t('sp_name_ph'),
+            phonePh: t('sp_phone_ph'), anyShop: t('sp_any_shop'),
+            add: t('sp_add'), save: t('sp_save'), cancel: t('sp_cancel'),
+            edit: t('sp_edit'), del: t('sp_del'), enable: t('sp_enable'),
+            disable: t('sp_disable'), disabled: t('sp_disabled'),
+            empty: t('sp_empty'), inUse: t('sp_in_use'),
           }}
         />
       </section>

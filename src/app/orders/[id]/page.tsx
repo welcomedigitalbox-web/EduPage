@@ -1,16 +1,13 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { orderDetail, shops, paymentChannels } from '@/lib/orders';
+import { orderDetail, shops, paymentChannels, salesPeople } from '@/lib/orders';
 import { ctx } from '@/lib/server-ctx';
 import { OrderForm } from '@/components/OrderForm';
 import { orderFormLabels } from '@/lib/order-labels';
-import { CopyOrder } from '@/components/CopyOrder';
 import { OrderWorkflow } from '@/components/OrderWorkflow';
-import { OrderCard } from '@/components/OrderCard';
 import { canEdit } from '@/lib/order-workflow';
 import { admin } from '@/lib/supabase';
 import { getSettings } from '@/lib/crm';
-import { Receipt } from '@/components/Receipt';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +23,7 @@ export default async function OrderPage({
   const data = await orderDetail(id);
   if (!data) notFound();
   const { order, items } = data;
-  const [list, channels] = await Promise.all([shops(), paymentChannels()]);
+  const [list, channels, sellers] = await Promise.all([shops(), paymentChannels(), salesPeople()]);
 
   const ref = `EBH-${String(order.order_no).padStart(5, '0')}`;
   const fmt = (n: unknown) => Number(n ?? 0).toLocaleString();
@@ -52,6 +49,7 @@ export default async function OrderPage({
         <OrderForm
           shops={list as { id: string; name: string; region: string | null }[]}
           channels={channels as { id: string; name: string; kind: string }[]}
+          sellers={sellers as { id: string; name: string }[]}
           orderId={id}
           contactId={order.contact_id as string | null}
           conversationId={order.conversation_id as string | null}
@@ -67,6 +65,7 @@ export default async function OrderPage({
             payment_channel_id: (order.payment_channel_id as string) ?? '',
             payment_ref: (order.payment_ref as string) ?? '',
             payment_slip_url: (order.payment_slip_url as string) ?? '',
+            sales_person_id: (order.sales_person_id as string) ?? '',
             advance_payment: Number(order.advance_payment),
             delivery_fee: Number(order.delivery_fee),
             discount: Number(order.discount),
@@ -103,70 +102,6 @@ export default async function OrderPage({
 
   // The same four cards, flattened for Viber. Anything that is empty on screen
   // is left out here too, so the message stays short enough to read on a phone.
-  const shareText = [
-    `${ref} · ${t(`os_${order.status}`)}`,
-    '',
-    `【${t('or2_card_items')}】`,
-    ...items.map((i) =>
-      `• ${i.description as string}${i.barcode ? ` (${i.barcode})` : ''}` +
-      ` — ${fmt(i.qty)} × ${fmt(i.unit_price)} = ${fmt(i.line_total)}`),
-    '',
-    `【${t('or2_card_customer')}】`,
-    `${t('or2_name')}: ${order.customer_name as string}`,
-    `${t('or2_phone')}: ${(order.phone as string) ?? '—'}`,
-    order.city ? `${t('or2_city')}: ${order.city as string}` : null,
-    order.delivery_address ? `${t('or2_address')}: ${order.delivery_address as string}` : null,
-    '',
-    `【${t('or2_card_payment')}】`,
-    `${t('or2_payment')}: ${t(`or2_${order.payment_method}`)}${channel ? ` (${channel})` : ''}`,
-    `${t('or2_subtotal')}: ${fmt(order.subtotal)}`,
-    Number(order.discount) > 0 ? `${t('or2_discount')}: -${fmt(order.discount)}` : null,
-    Number(order.delivery_fee) > 0 ? `${t('or2_delivery_fee')}: ${fmt(order.delivery_fee)}` : null,
-    `${t('or2_grand_total')}: ${fmt(order.grand_total)} MMK`,
-    advance > 0 ? `${t('or2_advance')}: ${fmt(advance)} MMK` : null,
-    advance > 0 ? `${t('or2_final_payment')}: ${fmt(balance)} MMK` : null,
-    `${t('or2_delivery_method')}: ${(order.delivery_method as string) ?? '—'}`,
-    '',
-    `【${t('or2_card_meta')}】`,
-    `${t('or2_shop')}: ${shop?.name ?? '—'}`,
-    `${t('or2_order_date')}: ${dateStr}`,
-    `${t('or2_created_by')}: ${(order.created_by_name as string) ?? '—'}`,
-    order.note ? `${t('or2_note')}: ${order.note as string}` : null,
-  ].filter((l) => l !== null).join('\n');
-
-  const receiptMoney: [string, string, boolean?][] = [
-    [t('or2_subtotal'), `${fmt(order.subtotal)} MMK`],
-    ...(Number(order.discount) > 0
-      ? [[t('or2_discount'), `−${fmt(order.discount)} MMK`] as [string, string]] : []),
-    ...(Number(order.delivery_fee) > 0
-      ? [[t('or2_delivery_fee'), `${fmt(order.delivery_fee)} MMK`] as [string, string]] : []),
-    [t('or2_grand_total'), `${fmt(order.grand_total)} MMK`, true],
-    ...(advance > 0
-      ? [[t('rc_paid'), `${fmt(advance)} MMK`] as [string, string],
-         [t('rc_due'), `${fmt(balance)} MMK`] as [string, string]]
-      : []),
-  ];
-
-  const receiptShop = settings.receipt_shop_name || settings.business_name;
-  const receiptText = [
-    receiptShop,
-    settings.receipt_phone || null,
-    settings.receipt_note || null,
-    '',
-    `${ref} · ${dateStr}`,
-    `${t('rc_to')}: ${order.customer_name as string}`,
-    order.phone ? `${order.phone as string}` : null,
-    order.delivery_address ? `${order.delivery_address as string}` : null,
-    '',
-    ...items.map((i) =>
-      `${fmt(i.qty)} × ${i.description as string} — ${fmt(i.line_total)}`),
-    '',
-    ...receiptMoney.map(([k, v]) => `${k}: ${v}`),
-    order.delivery_method ? `${t('or2_delivery_method')}: ${order.delivery_method as string}` : null,
-    '',
-    settings.receipt_footer || null,
-  ].filter((l) => l !== null).join('\n');
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -178,90 +113,12 @@ export default async function OrderPage({
           <p className="text-sm text-muted">{t(`os_${order.status}`)} · {dateStr}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Receipt
-            text={receiptText}
-            data={{
-              shopName: receiptShop,
-              phone: settings.receipt_phone,
-              note: settings.receipt_note,
-              footer: settings.receipt_footer,
-              ref, date: dateStr,
-              customer: order.customer_name as string,
-              customerPhone: (order.phone as string) ?? null,
-              address: (order.delivery_address as string) ?? null,
-              lines: items.map((i) => ({
-                qty: fmt(i.qty),
-                name: i.description as string,
-                price: fmt(i.unit_price),
-                total: fmt(i.line_total),
-              })),
-              money: receiptMoney,
-              deliveryMethod: (order.delivery_method as string) ?? null,
-              paymentMethod: t(`or2_${order.payment_method}`),
-            }}
-            labels={{
-              open: t('rc_open'), close: t('rc_close'),
-              copy: t('or2_copy'), copied: t('or2_copied'), print: t('or2_print'),
-              hint: t('rc_hint'), to: t('rc_to'), qty: t('rc_qty'),
-              item: t('rc_item'), amount: t('rc_amount'),
-              delivery: t('or2_delivery_method'), payment: t('or2_payment'),
-            }}
-          />
-          <OrderCard
-            ref_={ref}
-            status={t(`os_${order.status}`)}
-            date={dateStr}
-            total={`${fmt(order.grand_total)} MMK`}
-            shareText={shareText}
-            sections={[
-              {
-                title: t('or2_card_items'),
-                // Quantity leads the line so it is never missing — a card that
-                // shows a price without a count is the thing people argue over.
-                rows: items.map((i) => [
-                  `${fmt(i.qty)} × ${i.description as string}`,
-                  `${fmt(i.line_total)}`,
-                  (i.barcode as string) || undefined,
-                ] as [string, string, string?]),
-              },
-              {
-                title: t('or2_card_customer'),
-                rows: ([
-                  [t('or2_name'), order.customer_name as string],
-                  [t('or2_phone'), (order.phone as string) ?? '—'],
-                  order.delivery_address
-                    ? [t('or2_address'), order.delivery_address as string] : null,
-                ].filter(Boolean)) as [string, string, string?][],
-              },
-              {
-                title: t('or2_card_payment'),
-                rows: ([
-                  [t('or2_payment'), `${t(`or2_${order.payment_method}`)}${channel ? ` · ${channel}` : ''}`],
-                  Number(order.discount) > 0
-                    ? [t('or2_discount'), `−${fmt(order.discount)}`] : null,
-                  Number(order.delivery_fee) > 0
-                    ? [t('or2_delivery_fee'), fmt(order.delivery_fee)] : null,
-                  advance > 0 ? [t('or2_advance'), `${fmt(advance)} MMK`] : null,
-                  advance > 0 ? [t('or2_final_payment'), `${fmt(balance)} MMK`] : null,
-                  [t('or2_delivery_method'), (order.delivery_method as string) ?? '—'],
-                ].filter(Boolean)) as [string, string, string?][],
-              },
-              {
-                title: t('or2_card_meta'),
-                rows: [
-                  [t('or2_shop'), shop?.name ?? '—'],
-                  [t('or2_created_by'), (order.created_by_name as string) ?? '—'],
-                ] as [string, string, string?][],
-              },
-            ]}
-            labels={{
-              open: t('or2_card_open'), close: t('or2_card_close'),
-              copy: t('or2_copy'), copied: t('or2_copied'), print: t('or2_print'),
-              hint: t('or2_card_hint'),
-            }}
-          />
-          <CopyOrder text={shareText}
-            labels={{ copy: t('or2_copy'), copied: t('or2_copied'), print: t('or2_print') }} />
+          <Link className="btn print:hidden" href={`/orders/${id}/receipt`}>
+            {t('rc_open')}
+          </Link>
+          <Link className="btn print:hidden" href={`/orders/${id}/card`}>
+            {t('or2_card_page')}
+          </Link>
           {order.conversation_id ? (
             <Link className="btn print:hidden" href={`/inbox/${order.conversation_id}`}>
               {t('or2_open_chat')}
@@ -413,6 +270,7 @@ export default async function OrderPage({
           <div className="label">{t('or2_card_meta')}</div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <Row k={t('or2_order_id')} v={ref} />
+            <Row k={t('or2_seller')} v={(order.sales_person_name as string) ?? '—'} />
             <Row k={t('or2_created_by')} v={(order.created_by_name as string) ?? '—'} />
             <Row k={t('or2_order_date')} v={dateStr} />
             <Row k={t('or2_shop')} v={shop?.name ?? '—'} />

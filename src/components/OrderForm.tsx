@@ -24,6 +24,7 @@ export interface OrderFormLabels {
   codDue: string; fixFirst: string; channel: string; pickChannel: string;
   payRef: string; payRefPh: string;
   slip: string; slipAdd: string; slipView: string; slipRemove: string; uploading: string;
+  seller: string; pickSeller: string;
   deliveryMethod: string; deliveryPh: string; orderDate: string; status: string;
   note: string; notePh: string; save: string; saving: string; failed: string;
   errors: Record<string, string>;
@@ -31,14 +32,16 @@ export interface OrderFormLabels {
 }
 
 export function OrderForm({
-  shops, channels, initial, contactId, conversationId, orderId, labels,
+  shops, channels, sellers, initial, contactId, conversationId, orderId, labels,
 }: {
   shops: { id: string; name: string; region: string | null }[];
   channels: { id: string; name: string; kind: string }[];
+  sellers: { id: string; name: string }[];
   initial: Partial<{
     customer_name: string; phone: string; city: string; delivery_address: string;
     shop_id: string; order_date: string; delivery_method: string; payment_method: string;
     payment_channel_id: string; payment_ref: string; payment_slip_url: string;
+    sales_person_id: string;
     advance_payment: number; delivery_fee: number; discount: number; status: string;
     note: string; items: Line[];
   }>;
@@ -67,6 +70,7 @@ export function OrderForm({
     payment_channel_id: initial.payment_channel_id ?? '',
     payment_ref: initial.payment_ref ?? '',
     payment_slip_url: initial.payment_slip_url ?? '',
+    sales_person_id: initial.sales_person_id ?? '',
     advance_payment: initial.advance_payment ?? 0,
     delivery_fee: initial.delivery_fee ?? 0,
     discount: initial.discount ?? 0,
@@ -202,6 +206,14 @@ export function OrderForm({
             </select>
           </Field>
         </div>
+        <Field label={labels.seller} err={show('sales_person_id')}>
+          <select className={`${INPUT} ${show('sales_person_id') ? BAD : ''}`}
+            value={f.sales_person_id}
+            onChange={(e) => set('sales_person_id', e.target.value)}>
+            <option value="">{labels.pickSeller}</option>
+            {sellers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </Field>
         <Field label={labels.address}>
           <textarea className={INPUT} rows={2} value={f.delivery_address}
             onChange={(e) => set('delivery_address', e.target.value)} />
@@ -333,7 +345,8 @@ export function OrderForm({
                       onClick={() => set('payment_slip_url', '')}>{labels.slipRemove}</button>
                   </div>
                 ) : (
-                  <label className="btn inline-block cursor-pointer text-xs">
+                  <label className={`btn inline-block cursor-pointer text-xs ${
+                    show('payment_slip_url') ? 'border-bad text-bad' : ''}`}>
                     {uploading ? labels.uploading : labels.slipAdd}
                     <input type="file" accept="image/*" className="hidden"
                       onChange={(e) => {
@@ -341,6 +354,9 @@ export function OrderForm({
                         if (file) uploadSlip(file);
                       }} />
                   </label>
+                )}
+                {show('payment_slip_url') && (
+                  <p className="mt-1 text-[11px] text-bad">{show('payment_slip_url')}</p>
                 )}
               </div>
             </div>

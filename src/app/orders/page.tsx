@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { orderList, shops, paymentChannels } from '@/lib/orders';
+import { orderList, shops, paymentChannels, salesPeople } from '@/lib/orders';
 import { admin } from '@/lib/supabase';
 import { ctx } from '@/lib/server-ctx';
 import { money, num } from '@/components/ui';
@@ -23,6 +23,7 @@ export default async function Orders({
 }: {
   searchParams: Promise<{
     status?: string; q?: string; shop?: string; by?: string; pay?: string; channel?: string;
+    seller?: string;
     preset?: string; since?: string; until?: string;
   }>;
 }) {
@@ -30,7 +31,7 @@ export default async function Orders({
   const sp = await searchParams;
   const r = resolveRange(sp);
 
-  const [rows, shopList, channelList, staffRes] = await Promise.all([
+  const [rows, shopList, channelList, sellerList, staffRes] = await Promise.all([
     orderList({
       status: sp.status, q: sp.q,
       // A search is a hunt for one specific order, which is usually an old
@@ -38,10 +39,11 @@ export default async function Orders({
       since: sp.q ? undefined : r.since,
       until: sp.q ? undefined : r.until,
       shop_id: sp.shop, created_by: sp.by,
-      payment_method: sp.pay, payment_channel_id: sp.channel,
+      payment_method: sp.pay, payment_channel_id: sp.channel, seller: sp.seller,
     }),
     shops(),
     paymentChannels({ all: true }),
+    salesPeople({ all: true }),
     admin().from('msgr_users').select('id,name,email').order('name'),
   ]);
 
@@ -69,7 +71,15 @@ export default async function Orders({
           <p className="text-sm text-muted">{t('or2_sub')}</p>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <Link className="btn-primary" href="/orders/new">{t('or2_new')}</Link>
+          <div className="flex gap-2">
+            <a className="btn text-sm"
+               href={`/api/online-orders/export?${new URLSearchParams(
+                 Object.entries(sp).filter(([, v]) => v).map(([k, v]) => [k, String(v)])
+               ).toString()}&since=${r.since}&until=${r.until}`}>
+              {t('or2_export')}
+            </a>
+            <Link className="btn-primary" href="/orders/new">{t('or2_new')}</Link>
+          </div>
           <RangePicker
             preset={r.preset} since={r.since} until={r.until} compare={false}
             showCompare={false}
@@ -103,11 +113,13 @@ export default async function Orders({
         }))}
         payments={payTerms.map((p) => ({ value: p, label: t(`or2_${p}`) }))}
         channels={channelList.map((c) => ({ value: c.id as string, label: c.name as string }))}
+        sellers={sellerList.map((p) => ({ value: p.id as string, label: p.name as string }))}
         labels={{
           shop: t('or2_shop'), anyShop: t('or2_any_shop'),
           staff: t('or2_by'), anyStaff: t('or2_any_staff'),
           payment: t('or2_payment'), anyPayment: t('or2_any_payment'),
           channel: t('or2_channel'), anyChannel: t('or2_any_channel'),
+          seller: t('or2_seller'), anySeller: t('or2_any_seller'),
           search: t('or2_search_ph'), clear: t('or2_clear'),
         }}
       />
@@ -145,7 +157,7 @@ export default async function Orders({
                   </span>
                 </div>
                 <div className="text-[11px] text-muted">
-                  {(o.created_by_name as string) || t('or2_bot_created')}
+                  {(o.sales_person_name as string) || '—'}
                 </div>
               </Link>
             </li>
@@ -164,7 +176,7 @@ export default async function Orders({
               <th className="p-3 text-left font-normal">{t('or2_customer')}</th>
               <th className="p-3 text-left font-normal">{t('or2_shop')}</th>
               <th className="p-3 text-left font-normal">{t('or2_payment')}</th>
-              <th className="p-3 text-left font-normal">{t('or2_by')}</th>
+              <th className="p-3 text-left font-normal">{t('or2_seller')}</th>
               <th className="p-3 text-left font-normal">{t('or2_source')}</th>
               <th className="p-3 text-left font-normal">{t('or2_status')}</th>
               <th className="p-3 text-left font-normal">{t('or2_date')}</th>
@@ -200,7 +212,7 @@ export default async function Orders({
                     </div>
                   </td>
                   <td className="p-3 text-xs text-muted">
-                    {(o.created_by_name as string) || t('or2_bot_created')}
+                    {(o.sales_person_name as string) || '—'}
                   </td>
                   <td className="p-3 text-xs text-muted">
                     {o.source_ad_id ? `ad · ${String(o.source_ad_id).slice(-6)}` : (o.source_type as string) ?? 'organic'}

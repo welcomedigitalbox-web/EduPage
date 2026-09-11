@@ -11,6 +11,7 @@ export interface OrderFilterLabels {
   staff: string; anyStaff: string;
   payment: string; anyPayment: string;
   channel: string; anyChannel: string;
+  seller: string; anySeller: string;
   search: string; clear: string;
 }
 
@@ -18,12 +19,13 @@ export interface OrderFilterLabels {
  *  bookmarked and sent to someone else — and the range picker's own params
  *  survive because every control copies the query rather than replacing it. */
 export function OrderFilters({
-  shops, staff, payments, channels, labels,
+  shops, staff, payments, channels, sellers, labels,
 }: {
   shops: FilterOption[];
   staff: FilterOption[];
   payments: FilterOption[];
   channels: FilterOption[];
+  sellers: FilterOption[];
   labels: OrderFilterLabels;
 }) {
   const router = useRouter();
@@ -36,7 +38,8 @@ export function OrderFilters({
     router.push(`${pathname}?${q.toString()}`);
   }
 
-  const dirty = ['shop', 'by', 'pay', 'channel', 'q'].some((k) => sp.get(k));
+  const KEYS = ['shop', 'by', 'pay', 'channel', 'seller', 'q'];
+  const dirty = KEYS.some((k) => sp.get(k));
 
   const Picker = ({ name, any, options }: { name: string; any: string; options: FilterOption[] }) => (
     <select className={SEL} value={sp.get(name) ?? ''} onChange={(e) => go(name, e.target.value)}>
@@ -48,6 +51,7 @@ export function OrderFilters({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Picker name="shop" any={labels.anyShop} options={shops} />
+      {sellers.length > 0 && <Picker name="seller" any={labels.anySeller} options={sellers} />}
       <Picker name="by" any={labels.anyStaff} options={staff} />
       <Picker name="pay" any={labels.anyPayment} options={payments} />
       {channels.length > 0 && <Picker name="channel" any={labels.anyChannel} options={channels} />}
@@ -60,7 +64,7 @@ export function OrderFilters({
       {dirty && (
         <button className="btn text-xs" onClick={() => {
           const q = new URLSearchParams(sp.toString());
-          ['shop', 'by', 'pay', 'channel', 'q'].forEach((k) => q.delete(k));
+          KEYS.forEach((k) => q.delete(k));
           router.push(`${pathname}?${q.toString()}`);
         }}>{labels.clear}</button>
       )}

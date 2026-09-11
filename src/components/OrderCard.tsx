@@ -10,6 +10,62 @@ export interface CardLabels {
   open: string; close: string; copy: string; copied: string; print: string; hint: string;
 }
 
+/** The card itself, with no modal around it — a page renders this directly. */
+export function OrderCardBody({ ref_, status, date, total, sections }: {
+  ref_: string; status: string; date: string; total: string; sections: CardSection[];
+}) {
+  return (
+    <div id="order-card" className="rounded-2xl bg-white p-5 text-[13px] text-slate-900 shadow-xl">
+      <div className="flex items-baseline justify-between gap-3 border-b border-slate-200 pb-3">
+        <div>
+          <div className="text-lg font-bold tracking-tight">{ref_}</div>
+          <div className="text-[11px] text-slate-500">{date}</div>
+        </div>
+        <span className="shrink-0 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white">
+          {status}
+        </span>
+      </div>
+
+      {sections.map((sec) => (
+        <div key={sec.title} className="border-b border-slate-100 py-3 last:border-0">
+          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            {sec.title}
+          </div>
+          <div className="space-y-1.5">
+            {sec.rows.map(([k, v, sub], i) => {
+              // A long value (an address) gets its own line instead of being
+              // squeezed into half a row and wrapping through the label.
+              const long = v.length > 28;
+              return long ? (
+                <div key={i}>
+                  <div className="text-slate-500">{k}</div>
+                  <div className="font-medium">{v}</div>
+                  {sub ? <div className="text-[10px] text-slate-400">{sub}</div> : null}
+                </div>
+              ) : (
+                <div key={i} className="flex items-start justify-between gap-3">
+                  <span className="text-slate-500">
+                    {k}
+                    {sub ? (
+                      <span className="block text-[10px] tabular-nums text-slate-400">{sub}</span>
+                    ) : null}
+                  </span>
+                  <span className="shrink-0 text-right font-medium">{v}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      <div className="mt-3 flex items-baseline justify-between rounded-xl bg-slate-900 px-3 py-2.5 text-white">
+        <span className="text-[11px] opacity-80">Total</span>
+        <span className="text-base font-bold tabular-nums">{total}</span>
+      </div>
+    </div>
+  );
+}
+
 /**
  * A modal built to be screenshotted: a fixed 380px column on a light ground,
  * so the crop is predictable and the text stays readable when the picture is
