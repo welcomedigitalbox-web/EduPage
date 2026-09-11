@@ -28,11 +28,18 @@ export async function overview(since: string, until: string) {
   const db = admin();
   const { from: fromIso, to: toIso } = instants(since, until);
 
-  const [contacts, convoRows, orders, spendRes, needsHuman, botHandled, pendingTasks, aiRuns,
-         inboundRows] =
+  const [contacts, adContacts, convoRows, orders, spendRes, needsHuman, botHandled, pendingTasks,
+         aiRuns, inboundRows] =
     await Promise.all([
       db.from('msgr_contacts').select('id', { count: 'exact', head: true })
         .gte('first_seen_at', fromIso).lte('first_seen_at', toIso),
+      // The same first-time contacts, narrowed to those an ad brought in. This
+      // is the number that lines up with Meta's "conversations started" — both
+      // are about a NEW conversation an ad caused, not about every person who
+      // happens to have come from an ad at some point in the past.
+      db.from('msgr_contacts').select('id', { count: 'exact', head: true })
+        .gte('first_seen_at', fromIso).lte('first_seen_at', toIso)
+        .not('source_ad_id', 'is', null),
       // "Engaged" and "never a conversation" are about how many times the
       // customer wrote, not what stage the AI put them in — someone can send
       // five messages and still sit at stage "new" if the bot never classified
@@ -77,6 +84,8 @@ export async function overview(since: string, until: string) {
     (orders.data ?? []).map((o) => o.contact_id).filter(Boolean) as string[]
   ).size;
   const leads = contacts.count ?? 0;
+  const leadsAds = adContacts.count ?? 0;
+  const leadsOrganic = leads - leadsAds;
   const messagedIds = [...new Set(
     (inboundRows.data ?? []).map((m) => m.contact_id).filter(Boolean) as string[]
   )];
@@ -106,6 +115,8 @@ export async function overview(since: string, until: string) {
 
   return {
     leads,
+    leadsAds,
+    leadsOrganic,
     messaged,
     messagedAds,
     messagedOrganic,

@@ -29,7 +29,7 @@ const D: Dict = {
   ov_last_days: ['နောက်ဆုံး {n} ရက်', 'Last {n} days'],
   ov_days: ['{n}ရက်', '{n}d'],
   ov_leads: ['လာဆက်သွယ်သူ (lead)', 'People who messaged'],
-  ov_leads_sub: ['Messenger စာ ပထမဆုံးပို့သူ', 'First-time Messenger contacts'],
+  ov_leads_sub: ['ပထမဆုံးပို့သူ · Ads {a} · Organic {o}', 'First-time · ads {a} · organic {o}'],
   ov_meta_convos: ['Meta စာစမြည် (ads)', 'Meta conversations (ads)'],
   ov_meta_convos_sub: ['Meta က ad ကြောင့် စလို့ ရေတွက်တာ', "Meta's own ad-attributed count"],
   ov_meta_cpc: ['{v} / တစ်ခု', '{v} each'],
