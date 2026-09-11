@@ -13,6 +13,7 @@
     "@anthropic-ai/sdk": "^0.65.0",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.58.0",
+    "html-to-image": "^1.11.13",
     "next": "15.5.24",
     "react": "19.1.0",
     "react-dom": "19.1.0",
