@@ -60,8 +60,9 @@ export default async function Overview({
         />
       </header>
 
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Stat label={t('ov_messaged')} value={num(o.messaged)} sub={t('ov_messaged_sub')}
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <Stat label={t('ov_messaged')} value={num(o.messaged)}
+              sub={t('ov_messaged_sub', { a: num(o.messagedAds), o: num(o.messagedOrganic) })}
               delta={d((x) => x.messaged)} />
         <Stat label={t('ov_leads')} value={num(o.leads)} sub={t('ov_leads_sub')}
               delta={d((x) => x.leads)} href={seg('leads')} />
@@ -74,7 +75,7 @@ export default async function Overview({
               delta={d((x) => x.buyers)} href={seg('won')} />
       </section>
 
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Stat label={t('ov_spend')} value={money(o.spend, cur)} href="/ads" delta={d((x) => x.spend)}
               deltaGood="down" prev={prev ? t('rg_prev', { v: money(prev.spend, cur) }) : undefined} />
         <Stat label={t('ov_meta_convos')} value={num(o.metaConversations)}
