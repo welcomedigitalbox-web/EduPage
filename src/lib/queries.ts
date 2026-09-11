@@ -28,7 +28,8 @@ export async function overview(since: string, until: string) {
   const db = admin();
   const { from: fromIso, to: toIso } = instants(since, until);
 
-  const [contacts, convoRows, orders, spendRes, needsHuman, botHandled, pendingTasks, aiRuns] =
+  const [contacts, convoRows, orders, spendRes, needsHuman, botHandled, pendingTasks, aiRuns,
+         inboundRows] =
     await Promise.all([
       db.from('msgr_contacts').select('id', { count: 'exact', head: true })
         .gte('first_seen_at', fromIso).lte('first_seen_at', toIso),
@@ -43,18 +44,31 @@ export async function overview(since: string, until: string) {
         .limit(20000),
       db.from('v_msgr_sales').select('contact_id,total,total_usd')
         .gte('created_at', fromIso).lte('created_at', toIso),
-      db.from('msgr_ad_daily').select('spend').gte('date', since).lte('date', until),
+      // Meta's own count of conversations an ad started. Reported by the
+      // Marketing API on a 7-day click / 1-day view window, so it will never
+      // match a plain calendar-day count of first messages — that difference is
+      // the attribution model, not a fault on either side.
+      db.from('msgr_ad_daily').select('spend,messaging_conversations_started')
+        .gte('date', since).lte('date', until),
       db.from('msgr_conversations').select('id', { count: 'exact', head: true }).eq('status', 'needs_human'),
       db.from('msgr_conversations').select('id', { count: 'exact', head: true }).eq('last_reply_by', 'bot'),
       db.from('msgr_follow_ups').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       db.from('msgr_ai_runs').select('action')
         .gte('created_at', fromIso).lte('created_at', toIso).limit(10000),
+      // Everyone who wrote in this window, new or returning — the number Meta's
+      // Business Suite calls "Total contacts". Ours counts only what reached
+      // the webhook, so it is the smaller, verifiable side of that comparison.
+      db.from('msgr_messages').select('contact_id')
+        .eq('direction', 'in')
+        .gte('sent_at', fromIso).lte('sent_at', toIso).limit(50000),
     ]);
 
   const revenue = (orders.data ?? []).reduce((s, o) => s + Number(o.total), 0);
   // Each sale was already converted at its own day's rate by the view.
   const revenueUsd = (orders.data ?? []).reduce((s, o) => s + Number(o.total_usd ?? 0), 0);
   const spend = (spendRes.data ?? []).reduce((s, r) => s + Number(r.spend), 0);
+  const metaConversations = (spendRes.data ?? [])
+    .reduce((s, r) => s + Number(r.messaging_conversations_started ?? 0), 0);
   const orderCount = orders.data?.length ?? 0;
   // People, not receipts. One customer placing three orders is one buyer, and
   // the tile that says "customers who bought" has to agree with the list it
@@ -63,6 +77,9 @@ export async function overview(since: string, until: string) {
     (orders.data ?? []).map((o) => o.contact_id).filter(Boolean) as string[]
   ).size;
   const leads = contacts.count ?? 0;
+  const messaged = new Set(
+    (inboundRows.data ?? []).map((m) => m.contact_id).filter(Boolean) as string[]
+  ).size;
   const runs = aiRuns.data ?? [];
   const handoffs = runs.filter((r) => r.action === 'handoff').length;
 
@@ -74,10 +91,13 @@ export async function overview(since: string, until: string) {
 
   return {
     leads,
+    messaged,
     engaged: engagedCount,
     noConvo,
     orders: orderCount,
     buyers,
+    metaConversations,
+    costPerMetaConversation: metaConversations ? spend / metaConversations : null,
     revenue,
     spend,
     costPerLead: leads ? spend / leads : null,
