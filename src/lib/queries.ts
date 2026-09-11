@@ -77,9 +77,24 @@ export async function overview(since: string, until: string) {
     (orders.data ?? []).map((o) => o.contact_id).filter(Boolean) as string[]
   ).size;
   const leads = contacts.count ?? 0;
-  const messaged = new Set(
+  const messagedIds = [...new Set(
     (inboundRows.data ?? []).map((m) => m.contact_id).filter(Boolean) as string[]
-  ).size;
+  )];
+  const messaged = messagedIds.length;
+
+  // Paid vs organic, read from the ad each contact first arrived through. The
+  // label is frozen at first contact, so someone who came from an ad in June
+  // and writes again today still counts as paid — which is how a shop thinks
+  // about it, and why this will not line up with Meta's per-conversation split.
+  let messagedAds = 0;
+  if (messagedIds.length) {
+    const { count } = await db.from('msgr_contacts')
+      .select('id', { count: 'exact', head: true })
+      .in('id', messagedIds.slice(0, 1000))
+      .not('source_ad_id', 'is', null);
+    messagedAds = count ?? 0;
+  }
+  const messagedOrganic = messaged - messagedAds;
   const runs = aiRuns.data ?? [];
   const handoffs = runs.filter((r) => r.action === 'handoff').length;
 
@@ -92,6 +107,8 @@ export async function overview(since: string, until: string) {
   return {
     leads,
     messaged,
+    messagedAds,
+    messagedOrganic,
     engaged: engagedCount,
     noConvo,
     orders: orderCount,

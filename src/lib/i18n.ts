@@ -34,7 +34,7 @@ const D: Dict = {
   ov_meta_convos_sub: ['Meta က ad ကြောင့် စလို့ ရေတွက်တာ', "Meta's own ad-attributed count"],
   ov_meta_cpc: ['{v} / တစ်ခု', '{v} each'],
   ov_messaged: ['စာပို့သူ အားလုံး', 'Everyone who messaged'],
-  ov_messaged_sub: ['အသစ် + ပြန်လာသူ (Meta: Total contacts)', 'New + returning (Meta: Total contacts)'],
+  ov_messaged_sub: ['Ads {a} · Organic {o}', 'Ads {a} · organic {o}'],
   ov_engaged: ['စကားအဆင်ပြေသွားသူ', 'Real conversations'],
   ov_engaged_sub: ['၂ ကြိမ်အထက် စာပြန်ပြောသွား', 'Sent more than one message'],
   ov_noconvo: ['စကားမဖြစ်သွားသူ', 'Never became a conversation'],
