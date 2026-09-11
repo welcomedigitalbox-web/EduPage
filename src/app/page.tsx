@@ -60,7 +60,9 @@ export default async function Overview({
         />
       </header>
 
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <Stat label={t('ov_messaged')} value={num(o.messaged)} sub={t('ov_messaged_sub')}
+              delta={d((x) => x.messaged)} />
         <Stat label={t('ov_leads')} value={num(o.leads)} sub={t('ov_leads_sub')}
               delta={d((x) => x.leads)} href={seg('leads')} />
         <Stat label={t('ov_engaged')} value={num(o.engaged)} sub={t('ov_engaged_sub')}
@@ -75,6 +77,11 @@ export default async function Overview({
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label={t('ov_spend')} value={money(o.spend, cur)} href="/ads" delta={d((x) => x.spend)}
               deltaGood="down" prev={prev ? t('rg_prev', { v: money(prev.spend, cur) }) : undefined} />
+        <Stat label={t('ov_meta_convos')} value={num(o.metaConversations)}
+              sub={o.costPerMetaConversation != null
+                ? t('ov_meta_cpc', { v: money(o.costPerMetaConversation, cur, 2) })
+                : t('ov_meta_convos_sub')}
+              delta={d((x) => x.metaConversations)} href="/ads" />
         <Stat label={t('ov_cpl')} value={money(o.costPerLead, cur, 2)}
               delta={d((x) => x.costPerLead)} deltaGood="down"
               prev={prev ? t('rg_prev', { v: money(prev.costPerLead, cur, 2) }) : undefined} />
