@@ -20,6 +20,8 @@ export function orderFormLabels(
     channel: t('or2_channel'), pickChannel: t('or2_pick_channel'),
     payRef: t('or2_pay_ref'), payRefPh: t('or2_pay_ref_ph'),
     seller: t('or2_seller'), pickSeller: t('or2_pick_seller'),
+    srcChannel: t('or2_src_channel'), pickSrc: t('or2_pick_src'),
+    discAmount: t('or2_disc_amount'), discPercent: t('or2_disc_percent'),
     slip: t('or2_slip'), slipAdd: t('or2_slip_add'), slipView: t('or2_slip_view'),
     slipRemove: t('or2_slip_remove'), uploading: t('or2_uploading'),
     deliveryMethod: t('or2_delivery_method'), deliveryPh: t('or2_delivery_ph'),
@@ -35,6 +37,8 @@ export function orderFormLabels(
       transfer_full: t('ove_transfer_full'), deposit_required: t('ove_deposit_required'),
       future: t('ove_future'), channel_required: t('ove_channel_required'),
       slip_required: t('ove_slip_required'), seller_required: t('ove_seller_required'),
+      over_percent: t('ove_over_percent'),
+      channel_src_required: t('ove_channel_src_required'),
     },
     statuses: {
       pending: t('os_pending'), confirmed: t('os_confirmed'), packed: t('os_packed'),

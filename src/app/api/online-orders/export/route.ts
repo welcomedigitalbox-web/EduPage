@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
     payment_method: p.get('pay') ?? undefined,
     payment_channel_id: p.get('channel') ?? undefined,
     seller: p.get('seller') ?? undefined,
+    src: p.get('src') ?? undefined,
     limit: 5000,
   });
 
@@ -33,9 +34,10 @@ export async function GET(req: NextRequest) {
     'order_no', 'order_date', 'status', 'payment_status', 'delivery_status',
     'customer_name', 'phone', 'city_typed', 'address_typed',
     'region_en', 'region_mm', 'city_clean', 'township_clean', 'address_matched',
-    'shop', 'sales_person', 'payment_method', 'payment_channel', 'payment_ref',
+    'shop', 'sales_person', 'order_channel', 'payment_method', 'payment_channel', 'payment_ref',
     'delivery_method', 'items', 'subtotal', 'discount', 'delivery_fee',
-    'grand_total', 'advance_paid', 'balance_due', 'source', 'ad_id',
+    'grand_total', 'advance_paid', 'balance_due', 'discount_type', 'discount_value',
+    'source', 'ad_id',
   ];
 
   const lines = [header.join(',')];
@@ -56,6 +58,7 @@ export async function GET(req: NextRequest) {
       clean.matched ? 'yes' : 'no',
       (o.msgr_shops as { name?: string } | null)?.name ?? '',
       o.sales_person_name ?? '',
+      o.order_channel_name ?? '',
       o.payment_method,
       (o.msgr_payment_channels as { name?: string } | null)?.name ?? '',
       o.payment_ref ?? '',
@@ -63,6 +66,7 @@ export async function GET(req: NextRequest) {
       (o.msgr_order_items as unknown[] | null)?.length ?? 0,
       o.subtotal, o.discount, o.delivery_fee, o.grand_total,
       advance, Number(o.grand_total ?? 0) - advance,
+      o.discount_type ?? 'amount', o.discount_value ?? 0,
       o.source_ad_id ? 'ad' : (o.source_type ?? 'organic'),
       o.source_ad_id ?? '',
     ].map(csvCell).join(','));

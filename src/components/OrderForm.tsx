@@ -25,6 +25,7 @@ export interface OrderFormLabels {
   payRef: string; payRefPh: string;
   slip: string; slipAdd: string; slipView: string; slipRemove: string; uploading: string;
   seller: string; pickSeller: string;
+  srcChannel: string; pickSrc: string; discAmount: string; discPercent: string;
   deliveryMethod: string; deliveryPh: string; orderDate: string; status: string;
   note: string; notePh: string; save: string; saving: string; failed: string;
   errors: Record<string, string>;
@@ -32,16 +33,18 @@ export interface OrderFormLabels {
 }
 
 export function OrderForm({
-  shops, channels, sellers, initial, contactId, conversationId, orderId, labels,
+  shops, channels, sellers, srcChannels, initial, contactId, conversationId, orderId, labels,
 }: {
   shops: { id: string; name: string; region: string | null }[];
   channels: { id: string; name: string; kind: string }[];
   sellers: { id: string; name: string }[];
+  srcChannels: { id: string; name: string }[];
   initial: Partial<{
     customer_name: string; phone: string; city: string; delivery_address: string;
     shop_id: string; order_date: string; delivery_method: string; payment_method: string;
     payment_channel_id: string; payment_ref: string; payment_slip_url: string;
-    sales_person_id: string;
+    sales_person_id: string; order_channel_id: string;
+    discount_type: string; discount_value: number;
     advance_payment: number; delivery_fee: number; discount: number; status: string;
     note: string; items: Line[];
   }>;
@@ -71,6 +74,9 @@ export function OrderForm({
     payment_ref: initial.payment_ref ?? '',
     payment_slip_url: initial.payment_slip_url ?? '',
     sales_person_id: initial.sales_person_id ?? '',
+    order_channel_id: initial.order_channel_id ?? '',
+    discount_type: initial.discount_type ?? 'amount',
+    discount_value: initial.discount_value ?? initial.discount ?? 0,
     advance_payment: initial.advance_payment ?? 0,
     delivery_fee: initial.delivery_fee ?? 0,
     discount: initial.discount ?? 0,
@@ -99,9 +105,11 @@ export function OrderForm({
     setLines((p) => p.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
 
   const money = useMemo(
-    () => orderMoney({ items: lines, discount: f.discount, delivery_fee: f.delivery_fee,
-                       advance_payment: f.advance_payment }),
-    [lines, f.discount, f.delivery_fee, f.advance_payment]
+    () => orderMoney({
+      items: lines, delivery_fee: f.delivery_fee, advance_payment: f.advance_payment,
+      discount_type: f.discount_type, discount_value: f.discount_value,
+    }),
+    [lines, f.discount_type, f.discount_value, f.delivery_fee, f.advance_payment]
   );
 
   const errs = useMemo(
@@ -206,6 +214,15 @@ export function OrderForm({
             </select>
           </Field>
         </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={labels.srcChannel} err={show('order_channel_id')}>
+          <select className={`${INPUT} ${show('order_channel_id') ? BAD : ''}`}
+            value={f.order_channel_id}
+            onChange={(e) => set('order_channel_id', e.target.value)}>
+            <option value="">{labels.pickSrc}</option>
+            {srcChannels.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </Field>
         <Field label={labels.seller} err={show('sales_person_id')}>
           <select className={`${INPUT} ${show('sales_person_id') ? BAD : ''}`}
             value={f.sales_person_id}
@@ -214,6 +231,7 @@ export function OrderForm({
             {sellers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </Field>
+        </div>
         <Field label={labels.address}>
           <textarea className={INPUT} rows={2} value={f.delivery_address}
             onChange={(e) => set('delivery_address', e.target.value)} />
@@ -259,10 +277,22 @@ export function OrderForm({
           <div className="label">{labels.money}</div>
           <Row k={labels.subtotal} v={fmt(money.subtotal)} />
           <div className="grid grid-cols-2 gap-3">
-            <Field label={labels.discount} err={show('discount')}>
-              <input className={`${INPUT} ${show('discount') ? BAD : ''}`} type="number"
-                min={0} step="any" inputMode="decimal" value={f.discount}
-                onChange={(e) => set('discount', Number(e.target.value))} />
+            <Field label={labels.discount} err={show('discount_value')}>
+              <div className="flex gap-1">
+                <input className={`${INPUT} ${show('discount_value') ? BAD : ''}`} type="number"
+                  min={0} step="any" inputMode="decimal" value={f.discount_value}
+                  onChange={(e) => set('discount_value', Number(e.target.value))} />
+                <select className={`${INPUT} w-20 shrink-0`} value={f.discount_type}
+                  onChange={(e) => set('discount_type', e.target.value)}>
+                  <option value="amount">{labels.discAmount}</option>
+                  <option value="percent">{labels.discPercent}</option>
+                </select>
+              </div>
+              {f.discount_type === 'percent' && money.discount > 0 && (
+                <span className="mt-1 block text-[11px] text-muted">
+                  −{fmt(money.discount)} MMK
+                </span>
+              )}
             </Field>
             <Field label={labels.deliveryFee} err={show('delivery_fee')}>
               <input className={`${INPUT} ${show('delivery_fee') ? BAD : ''}`} type="number"

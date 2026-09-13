@@ -22,7 +22,12 @@ export interface RuleInput {
   sales_person_id?: string | null;
   advance_payment?: number;
   discount?: number;
+  /** 'amount' (MMK off) or 'percent' (% of the subtotal). */
+  discount_type?: string;
+  /** What was typed — MMK when the type is amount, the percentage when not. */
+  discount_value?: number;
   delivery_fee?: number;
+  order_channel_id?: string | null;
   items: RuleLine[];
 }
 
@@ -43,11 +48,25 @@ export function phoneLooksValid(raw: string | null | undefined): boolean {
   return /^09\d{7,9}$/.test(n);
 }
 
+/** The money actually taken off, whichever way it was entered. A percentage is
+ *  always of the items' subtotal — never of the delivery fee, which is a cost
+ *  the shop passes on rather than something it can discount. */
+export function discountAmount(
+  subtotal: number, type: string | undefined, value: number | undefined, fallback?: number
+): number {
+  const v = Number(value ?? 0);
+  if (type === 'percent') return Math.round((subtotal * Math.min(v, 100)) / 100);
+  // An order saved before the two fields existed only has the plain amount.
+  return v || Number(fallback ?? 0);
+}
+
 export function orderMoney(input: RuleInput) {
   const subtotal = (input.items ?? []).reduce(
     (a, l) => a + Number(l.unit_price || 0) * Number(l.qty || 0), 0
   );
-  const discount = Number(input.discount || 0);
+  const discount = discountAmount(
+    subtotal, input.discount_type, input.discount_value, input.discount
+  );
   const delivery = Number(input.delivery_fee || 0);
   const grand_total = Math.max(0, subtotal - discount + delivery);
   const advance = Number(input.advance_payment || 0);
@@ -65,7 +84,7 @@ export function requiredAdvance(method: string, grand_total: number): number | n
 export type FieldKey =
   | 'customer_name' | 'phone' | 'shop_id' | 'order_date'
   | 'items' | 'discount' | 'delivery_fee' | 'advance_payment' | 'payment_channel_id'
-  | 'payment_slip_url' | 'sales_person_id';
+  | 'payment_slip_url' | 'sales_person_id' | 'discount_value' | 'order_channel_id';
 
 /** Returns a message key per offending field. The caller maps keys to text so
  *  the same rules can speak Burmese in the form and English in the log. */
@@ -83,8 +102,10 @@ export function validateOrder(input: RuleInput): Partial<Record<FieldKey, string
   else if (lines.some((l) => Number(l.unit_price || 0) < 0)) e.items = 'bad_price';
   else if (m.subtotal <= 0) e.items = 'zero_total';
 
-  if (m.discount < 0) e.discount = 'negative';
-  else if (m.discount > m.subtotal) e.discount = 'over_subtotal';
+  const dv = Number(input.discount_value ?? input.discount ?? 0);
+  if (dv < 0) e.discount_value = 'negative';
+  else if (input.discount_type === 'percent' && dv > 100) e.discount_value = 'over_percent';
+  else if (m.discount > m.subtotal) e.discount_value = 'over_subtotal';
   if (m.delivery < 0) e.delivery_fee = 'negative';
 
   const method = input.payment_method || 'cod';
@@ -105,6 +126,7 @@ export function validateOrder(input: RuleInput): Partial<Record<FieldKey, string
   if (m.advance > 0 && !input.payment_slip_url) e.payment_slip_url = 'slip_required';
 
   if (!input.sales_person_id) e.sales_person_id = 'seller_required';
+  if (!input.order_channel_id) e.order_channel_id = 'channel_src_required';
 
   if (input.order_date) {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Yangon' });

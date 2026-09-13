@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { orderDetail, shops, paymentChannels, salesPeople } from '@/lib/orders';
+import { orderDetail, shops, paymentChannels, salesPeople, orderChannels } from '@/lib/orders';
 import { ctx } from '@/lib/server-ctx';
 import { OrderForm } from '@/components/OrderForm';
 import { orderFormLabels } from '@/lib/order-labels';
@@ -23,7 +23,9 @@ export default async function OrderPage({
   const data = await orderDetail(id);
   if (!data) notFound();
   const { order, items } = data;
-  const [list, channels, sellers] = await Promise.all([shops(), paymentChannels(), salesPeople()]);
+  const [list, channels, sellers, srcChannels] = await Promise.all([
+    shops(), paymentChannels(), salesPeople(), orderChannels(),
+  ]);
 
   const ref = `EBH-${String(order.order_no).padStart(5, '0')}`;
   const fmt = (n: unknown) => Number(n ?? 0).toLocaleString();
@@ -50,6 +52,7 @@ export default async function OrderPage({
           shops={list as { id: string; name: string; region: string | null }[]}
           channels={channels as { id: string; name: string; kind: string }[]}
           sellers={sellers as { id: string; name: string }[]}
+          srcChannels={srcChannels as { id: string; name: string }[]}
           orderId={id}
           contactId={order.contact_id as string | null}
           conversationId={order.conversation_id as string | null}
@@ -66,6 +69,9 @@ export default async function OrderPage({
             payment_ref: (order.payment_ref as string) ?? '',
             payment_slip_url: (order.payment_slip_url as string) ?? '',
             sales_person_id: (order.sales_person_id as string) ?? '',
+            order_channel_id: (order.order_channel_id as string) ?? '',
+            discount_type: (order.discount_type as string) ?? 'amount',
+            discount_value: Number(order.discount_value ?? order.discount ?? 0),
             advance_payment: Number(order.advance_payment),
             delivery_fee: Number(order.delivery_fee),
             discount: Number(order.discount),
@@ -240,7 +246,10 @@ export default async function OrderPage({
           ) : null}
           <Row k={t('or2_subtotal')} v={`${fmt(order.subtotal)} MMK`} />
           {Number(order.discount) > 0 && (
-            <Row k={t('or2_discount')} v={`−${fmt(order.discount)} MMK`} />
+            <Row k={t('or2_discount')}
+              v={order.discount_type === 'percent'
+                ? `${fmt(order.discount_value)}% · −${fmt(order.discount)} MMK`
+                : `−${fmt(order.discount)} MMK`} />
           )}
           {Number(order.delivery_fee) > 0 && (
             <Row k={t('or2_delivery_fee')} v={`${fmt(order.delivery_fee)} MMK`} />
@@ -270,6 +279,7 @@ export default async function OrderPage({
           <div className="label">{t('or2_card_meta')}</div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <Row k={t('or2_order_id')} v={ref} />
+            <Row k={t('or2_src_channel')} v={(order.order_channel_name as string) ?? '—'} />
             <Row k={t('or2_seller')} v={(order.sales_person_name as string) ?? '—'} />
             <Row k={t('or2_created_by')} v={(order.created_by_name as string) ?? '—'} />
             <Row k={t('or2_order_date')} v={dateStr} />

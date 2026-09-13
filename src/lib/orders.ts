@@ -1,4 +1,5 @@
 import { admin } from './supabase';
+import { discountAmount } from './order-rules';
 
 export interface OrderItem {
   id?: string;
@@ -28,6 +29,9 @@ export interface OrderInput {
   advance_payment?: number;
   delivery_fee?: number;
   discount?: number;
+  discount_type?: string;
+  discount_value?: number;
+  order_channel_id?: string | null;
   status?: string;
   note?: string | null;
   items: OrderItem[];
@@ -41,14 +45,18 @@ export const ORDER_STATUSES = [
  *  suggestion, not a fact. */
 export function totals(input: {
   items: OrderItem[]; discount?: number; delivery_fee?: number;
+  discount_type?: string; discount_value?: number;
 }) {
   const subtotal = input.items.reduce(
     (a, i) => a + Number(i.unit_price || 0) * Number(i.qty || 0), 0
   );
-  const discount = Number(input.discount || 0);
+  const discount = discountAmount(
+    subtotal, input.discount_type, input.discount_value, input.discount
+  );
   const delivery = Number(input.delivery_fee || 0);
   return {
     subtotal,
+    discount,
     grand_total: Math.max(0, subtotal - discount + delivery),
   };
 }
@@ -79,9 +87,17 @@ export async function saveOrder(
     sellerName = (sp?.name as string) ?? null;
   }
 
-  const { subtotal, grand_total } = totals({
+  const { subtotal, discount, grand_total } = totals({
     items, discount: input.discount, delivery_fee: input.delivery_fee,
+    discount_type: input.discount_type, discount_value: input.discount_value,
   });
+
+  let channelName: string | null = null;
+  if (input.order_channel_id) {
+    const { data: ch } = await db.from('msgr_order_channels')
+      .select('name').eq('id', input.order_channel_id).maybeSingle();
+    channelName = (ch?.name as string) ?? null;
+  }
 
   const row: Record<string, unknown> = {
     contact_id: input.contact_id ?? null,
@@ -101,7 +117,11 @@ export async function saveOrder(
     sales_person_name: sellerName,
     advance_payment: Number(input.advance_payment || 0),
     delivery_fee: Number(input.delivery_fee || 0),
-    discount: Number(input.discount || 0),
+    discount,
+    discount_type: input.discount_type === 'percent' ? 'percent' : 'amount',
+    discount_value: Number(input.discount_value ?? input.discount ?? 0),
+    order_channel_id: input.order_channel_id || null,
+    order_channel_name: channelName,
     subtotal,
     grand_total,
     status: input.status || 'pending',
@@ -161,6 +181,15 @@ export async function shops() {
   return data ?? [];
 }
 
+export async function orderChannels(opts: { all?: boolean } = {}) {
+  let q = admin()
+    .from('msgr_order_channels').select('id,name,is_active')
+    .order('sort_order').order('name');
+  if (!opts.all) q = q.eq('is_active', true);
+  const { data } = await q;
+  return data ?? [];
+}
+
 export async function salesPeople(opts: { all?: boolean } = {}) {
   let q = admin()
     .from('msgr_sales_people').select('id,name,phone,shop_id,is_active')
@@ -198,7 +227,7 @@ export async function contactOrders(contactId: string) {
 export async function orderList(opts: {
   status?: string; q?: string; since?: string; until?: string; limit?: number;
   shop_id?: string; created_by?: string; payment_method?: string; payment_channel_id?: string;
-  seller?: string;
+  seller?: string; src?: string;
 }) {
   let q = admin()
     .from('msgr_orders')
@@ -212,6 +241,7 @@ export async function orderList(opts: {
   if (opts.payment_method) q = q.eq('payment_method', opts.payment_method);
   if (opts.payment_channel_id) q = q.eq('payment_channel_id', opts.payment_channel_id);
   if (opts.seller) q = q.eq('sales_person_id', opts.seller);
+  if (opts.src) q = q.eq('order_channel_id', opts.src);
   if (opts.since) q = q.gte('order_date', opts.since);
   if (opts.until) q = q.lte('order_date', opts.until);
   if (opts.q?.trim()) {

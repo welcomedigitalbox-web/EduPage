@@ -48,7 +48,10 @@ export default async function CardPage({ params }: { params: Promise<{ id: strin
       title: t('or2_card_payment'),
       rows: ([
         [t('or2_payment'), `${t(`or2_${order.payment_method}`)}${channel ? ` · ${channel}` : ''}`],
-        Number(order.discount) > 0 ? [t('or2_discount'), `−${fmt(order.discount)}`] : null,
+        Number(order.discount) > 0
+          ? [t('or2_discount'), order.discount_type === 'percent'
+              ? `${fmt(order.discount_value)}% · −${fmt(order.discount)}`
+              : `−${fmt(order.discount)}`] : null,
         Number(order.delivery_fee) > 0 ? [t('or2_delivery_fee'), fmt(order.delivery_fee)] : null,
         advance > 0 ? [t('or2_advance'), `${fmt(advance)} MMK`] : null,
         advance > 0 ? [t('or2_final_payment'), `${fmt(balance)} MMK`] : null,
@@ -59,6 +62,7 @@ export default async function CardPage({ params }: { params: Promise<{ id: strin
       title: t('or2_card_meta'),
       rows: ([
         [t('or2_shop'), shop?.name ?? '—'],
+        [t('or2_src_channel'), (order.order_channel_name as string) ?? '—'],
         [t('or2_seller'), (order.sales_person_name as string) ?? '—'],
         [t('or2_created_by'), (order.created_by_name as string) ?? '—'],
         order.note ? [t('or2_note'), order.note as string] : null,
