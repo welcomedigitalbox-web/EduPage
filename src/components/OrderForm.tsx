@@ -6,8 +6,9 @@ import {
   type FieldKey,
 } from '@/lib/order-rules';
 
-const INPUT =
-  'w-full rounded-lg border border-edge bg-ink p-2 text-sm outline-none focus:border-brand';
+const FIELD =
+  'rounded-lg border border-edge bg-ink p-2 text-sm outline-none focus:border-brand';
+const INPUT = `w-full ${FIELD}`;
 const BAD = 'border-bad focus:border-bad';
 
 export interface Line {
@@ -278,11 +279,14 @@ export function OrderForm({
           <Row k={labels.subtotal} v={fmt(money.subtotal)} />
           <div className="grid grid-cols-2 gap-3">
             <Field label={labels.discount} err={show('discount_value')}>
+              {/* w-full on both halves made them fight for the row; the number
+                  flexes and the unit keeps a fixed width instead. */}
               <div className="flex gap-1">
-                <input className={`${INPUT} ${show('discount_value') ? BAD : ''}`} type="number"
-                  min={0} step="any" inputMode="decimal" value={f.discount_value}
+                <input
+                  className={`min-w-0 flex-1 ${FIELD} ${show('discount_value') ? BAD : ''}`}
+                  type="number" min={0} step="any" inputMode="decimal" value={f.discount_value}
                   onChange={(e) => set('discount_value', Number(e.target.value))} />
-                <select className={`${INPUT} w-20 shrink-0`} value={f.discount_type}
+                <select className={`w-16 shrink-0 ${FIELD}`} value={f.discount_type}
                   onChange={(e) => set('discount_type', e.target.value)}>
                   <option value="amount">{labels.discAmount}</option>
                   <option value="percent">{labels.discPercent}</option>
