@@ -141,7 +141,21 @@ export function OrderForm({
     });
   }
 
+  // For COD and full transfer the advance is not a free number — it follows
+  // the total. Setting it once when the method was picked left it stale the
+  // moment a line was added, which is how a transfer order ended up showing
+  // nothing received and hiding the wallet and slip fields.
+  useEffect(() => {
+    const need = requiredAdvance(f.payment_method, money.grand_total);
+    if (need !== null && need !== f.advance_payment) {
+      setF((p) => ({ ...p, advance_payment: need }));
+    }
+  }, [f.payment_method, money.grand_total, f.advance_payment]);
+
   const advanceLocked = f.payment_method !== 'deposit';
+  // Anything but COD means money is expected, so ask where it came from and
+  // for the slip — without waiting for an amount to appear first.
+  const expectsPayment = f.payment_method === 'deposit' || f.payment_method === 'transfer';
 
   /** Slips go to the same store the inbox uses for its attachments, so there
    *  is one place to look for customer-supplied images. Several at once: a
@@ -354,7 +368,7 @@ export function OrderForm({
                 onChange={(e) => set('order_date', e.target.value)} />
             </Field>
           </div>
-          {money.advance > 0 && (
+          {expectsPayment && (
             <div className="grid grid-cols-2 gap-3">
               <Field label={labels.channel} err={show('payment_channel_id')}>
                 <select
