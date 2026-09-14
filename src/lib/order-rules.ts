@@ -19,6 +19,7 @@ export interface RuleInput {
   payment_method?: string;
   payment_channel_id?: string | null;
   payment_slip_url?: string | null;
+  payment_slips?: string[];
   sales_person_id?: string | null;
   advance_payment?: number;
   discount?: number;
@@ -123,7 +124,8 @@ export function validateOrder(input: RuleInput): Partial<Record<FieldKey, string
   if (m.advance > 0 && !input.payment_channel_id) e.payment_channel_id = 'channel_required';
   // Money that arrived by transfer has a slip. Without it nobody can prove the
   // transfer happened, and "the customer said they sent it" is not proof.
-  if (m.advance > 0 && !input.payment_slip_url) e.payment_slip_url = 'slip_required';
+  const slips = input.payment_slips ?? (input.payment_slip_url ? [input.payment_slip_url] : []);
+  if (m.advance > 0 && slips.length === 0) e.payment_slip_url = 'slip_required';
 
   if (!input.sales_person_id) e.sales_person_id = 'seller_required';
   if (!input.order_channel_id) e.order_channel_id = 'channel_src_required';

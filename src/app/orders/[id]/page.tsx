@@ -67,7 +67,7 @@ export default async function OrderPage({
             payment_method: order.payment_method as string,
             payment_channel_id: (order.payment_channel_id as string) ?? '',
             payment_ref: (order.payment_ref as string) ?? '',
-            payment_slip_url: (order.payment_slip_url as string) ?? '',
+            payment_slips: (order.payment_slips as string[]) ?? [],
             sales_person_id: (order.sales_person_id as string) ?? '',
             order_channel_id: (order.order_channel_id as string) ?? '',
             discount_type: (order.discount_type as string) ?? 'amount',
@@ -236,14 +236,24 @@ export default async function OrderPage({
           <Row k={t('or2_payment')} v={t(`or2_${order.payment_method}`)} />
           {channel ? <Row k={t('or2_channel')} v={channel} /> : null}
           {order.payment_ref ? <Row k={t('or2_pay_ref')} v={order.payment_ref as string} /> : null}
-          {order.payment_slip_url ? (
-            <a href={order.payment_slip_url as string} target="_blank" rel="noreferrer"
-               className="block overflow-hidden rounded-lg border border-edge">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={order.payment_slip_url as string} alt={t('or2_slip')}
-                   className="max-h-56 w-full object-contain bg-ink" />
-            </a>
-          ) : null}
+          {(() => {
+            const slips = ((order.payment_slips as string[]) ?? []).length
+              ? (order.payment_slips as string[])
+              : (order.payment_slip_url ? [order.payment_slip_url as string] : []);
+            if (!slips.length) return null;
+            return (
+              <div className={slips.length > 1 ? 'grid grid-cols-2 gap-2' : ''}>
+                {slips.map((url, i) => (
+                  <a key={url} href={url} target="_blank" rel="noreferrer"
+                     className="block overflow-hidden rounded-lg border border-edge">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={`${t('or2_slip')} ${i + 1}`}
+                         className="max-h-56 w-full bg-ink object-contain" />
+                  </a>
+                ))}
+              </div>
+            );
+          })()}
           <Row k={t('or2_subtotal')} v={`${fmt(order.subtotal)} MMK`} />
           {Number(order.discount) > 0 && (
             <Row k={t('or2_discount')}

@@ -25,6 +25,7 @@ export interface OrderInput {
   payment_channel_id?: string | null;
   payment_ref?: string | null;
   payment_slip_url?: string | null;
+  payment_slips?: string[];
   sales_person_id?: string | null;
   advance_payment?: number;
   delivery_fee?: number;
@@ -92,6 +93,10 @@ export async function saveOrder(
     discount_type: input.discount_type, discount_value: input.discount_value,
   });
 
+  const slips = (input.payment_slips ?? [])
+    .map((u) => u?.trim()).filter(Boolean) as string[];
+  if (!slips.length && input.payment_slip_url?.trim()) slips.push(input.payment_slip_url.trim());
+
   let channelName: string | null = null;
   if (input.order_channel_id) {
     const { data: ch } = await db.from('msgr_order_channels')
@@ -112,7 +117,10 @@ export async function saveOrder(
     payment_method: input.payment_method || 'cod',
     payment_channel_id: input.payment_channel_id || null,
     payment_ref: input.payment_ref?.trim() || null,
-    payment_slip_url: input.payment_slip_url?.trim() || null,
+    // The first slip is mirrored into the old column so nothing that reads it
+    // has to know about the array.
+    payment_slips: slips,
+    payment_slip_url: slips[0] ?? null,
     sales_person_id: input.sales_person_id || null,
     sales_person_name: sellerName,
     advance_payment: Number(input.advance_payment || 0),

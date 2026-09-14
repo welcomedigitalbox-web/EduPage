@@ -44,6 +44,7 @@ export function OrderForm({
     customer_name: string; phone: string; city: string; delivery_address: string;
     shop_id: string; order_date: string; delivery_method: string; payment_method: string;
     payment_channel_id: string; payment_ref: string; payment_slip_url: string;
+    payment_slips: string[];
     sales_person_id: string; order_channel_id: string;
     discount_type: string; discount_value: number;
     advance_payment: number; delivery_fee: number; discount: number; status: string;
@@ -73,7 +74,9 @@ export function OrderForm({
     payment_method: initial.payment_method ?? 'cod',
     payment_channel_id: initial.payment_channel_id ?? '',
     payment_ref: initial.payment_ref ?? '',
-    payment_slip_url: initial.payment_slip_url ?? '',
+    payment_slips: initial.payment_slips?.length
+      ? initial.payment_slips
+      : (initial.payment_slip_url ? [initial.payment_slip_url] : []) as string[],
     sales_person_id: initial.sales_person_id ?? '',
     order_channel_id: initial.order_channel_id ?? '',
     discount_type: initial.discount_type ?? 'amount',
@@ -133,23 +136,28 @@ export function OrderForm({
         // COD takes no money up front, so a wallet on the order would be a lie.
         payment_channel_id: advance > 0 ? p.payment_channel_id : '',
         payment_ref: advance > 0 ? p.payment_ref : '',
-        payment_slip_url: advance > 0 ? p.payment_slip_url : '',
+        payment_slips: advance > 0 ? p.payment_slips : [],
       };
     });
   }
 
   const advanceLocked = f.payment_method !== 'deposit';
 
-  /** The slip goes to the same store the inbox uses for its attachments, so
-   *  there is one place to look for customer-supplied images. */
-  async function uploadSlip(file: File) {
+  /** Slips go to the same store the inbox uses for its attachments, so there
+   *  is one place to look for customer-supplied images. Several at once: a
+   *  customer paying in two transfers sends two screenshots. */
+  async function uploadSlips(files: FileList) {
     setUploading(true);
-    const body = new FormData();
-    body.append('file', file);
-    const res = await fetch('/api/upload', { method: 'POST', body });
-    const j = await res.json().catch(() => ({}));
+    const added: string[] = [];
+    for (const file of Array.from(files)) {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.url) added.push(j.url as string);
+    }
     setUploading(false);
-    if (res.ok && j.url) set('payment_slip_url', j.url as string);
+    if (added.length) setF((p) => ({ ...p, payment_slips: [...p.payment_slips, ...added] }));
   }
 
   async function save() {
@@ -365,30 +373,37 @@ export function OrderForm({
               </Field>
               <div className="col-span-2">
                 <span className="mb-1 block text-[11px] text-muted">{labels.slip}</span>
-                {f.payment_slip_url ? (
-                  <div className="flex items-center gap-2">
-                    <a href={f.payment_slip_url} target="_blank" rel="noreferrer"
-                       className="block h-16 w-16 overflow-hidden rounded-lg border border-edge">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={f.payment_slip_url} alt={labels.slip}
-                           className="h-full w-full object-cover" />
-                    </a>
-                    <a className="btn text-xs" href={f.payment_slip_url}
-                       target="_blank" rel="noreferrer">{labels.slipView}</a>
-                    <button className="btn text-xs"
-                      onClick={() => set('payment_slip_url', '')}>{labels.slipRemove}</button>
-                  </div>
-                ) : (
+                <div className="space-y-2">
+                  {f.payment_slips.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {f.payment_slips.map((url, i) => (
+                        <div key={url} className="relative">
+                          <a href={url} target="_blank" rel="noreferrer"
+                             className="block h-20 w-20 overflow-hidden rounded-lg border border-edge">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt={`${labels.slip} ${i + 1}`}
+                                 className="h-full w-full object-cover" />
+                          </a>
+                          <button
+                            className="absolute -right-1.5 -top-1.5 rounded-full border border-edge bg-panel px-1.5 text-[10px]"
+                            aria-label={labels.slipRemove}
+                            onClick={() => setF((p) => ({
+                              ...p, payment_slips: p.payment_slips.filter((u) => u !== url),
+                            }))}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <label className={`btn inline-block cursor-pointer text-xs ${
                     show('payment_slip_url') ? 'border-bad text-bad' : ''}`}>
                     {uploading ? labels.uploading : labels.slipAdd}
-                    <input type="file" accept="image/*" className="hidden"
+                    <input type="file" accept="image/*" multiple className="hidden"
                       onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) uploadSlip(file);
+                        if (e.target.files?.length) uploadSlips(e.target.files);
+                        e.target.value = '';
                       }} />
                   </label>
-                )}
+                </div>
                 {show('payment_slip_url') && (
                   <p className="mt-1 text-[11px] text-bad">{show('payment_slip_url')}</p>
                 )}
