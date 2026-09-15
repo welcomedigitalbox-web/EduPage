@@ -10,10 +10,11 @@ export const dynamic = 'force-dynamic';
  *  statement is checked against. */
 export default async function Settle() {
   const { t } = await ctx();
-  const [rows, channels] = await Promise.all([
-    orderList({ paid: 'unpaid,partial', limit: 1000 }),
+  const [listed, channels] = await Promise.all([
+    orderList({ paid: 'unpaid,partial', perPage: 1000 }),
     paymentChannels(),
   ]);
+  const rows = listed.rows;
 
   const owed = rows
     .filter((o) => o.status !== 'cancelled')

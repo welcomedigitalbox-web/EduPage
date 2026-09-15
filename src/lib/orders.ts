@@ -243,17 +243,42 @@ function list(v: string | undefined): string[] {
   return (v ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 }
 
+/** Only the columns the list actually paints. Selecting `*` dragged the
+ *  address, the note and every slip URL across the wire for rows that never
+ *  show them. */
+const LIST_COLUMNS =
+  'id,order_no,order_date,status,payment_status,delivery_status,customer_name,phone,' +
+  'payment_method,advance_payment,amount_received,grand_total,sale_type,' +
+  'sales_person_name,order_channel_name,source_type,source_ad_id,shop_id,' +
+  'msgr_shops(name),msgr_payment_channels(name),msgr_order_items(id)';
+
 export async function orderList(opts: {
   status?: string; q?: string; since?: string; until?: string; limit?: number;
   shop_id?: string; created_by?: string; payment_method?: string; payment_channel_id?: string;
   seller?: string; src?: string; paid?: string; sale_type?: string;
+  page?: number; perPage?: number;
+  /** The CSV wants the columns the screen never shows. */
+  full?: boolean;
+  /** Just the three numbers the summary line adds up. */
+  totalsOnly?: boolean;
 }) {
+  const perPage = opts.perPage ?? opts.limit ?? 500;
+  const page = Math.max(1, opts.page ?? 1);
+  const from = (page - 1) * perPage;
+
   let q = admin()
     .from('msgr_orders')
-    .select('*, msgr_shops(name), msgr_payment_channels(name), msgr_order_items(id)')
+    .select(
+      opts.full
+        ? '*, msgr_shops(name), msgr_payment_channels(name), msgr_order_items(id)'
+        : opts.totalsOnly
+          ? 'status,grand_total,amount_received'
+          : LIST_COLUMNS,
+      { count: 'exact' }
+    )
     .order('order_date', { ascending: false })
     .order('created_at', { ascending: false })
-    .limit(opts.limit ?? 500);
+    .range(from, from + perPage - 1);
   const apply = (col: string, raw: string | undefined) => {
     const vs = list(raw);
     if (vs.length === 1) q = q.eq(col, vs[0]);
@@ -267,6 +292,15 @@ export async function orderList(opts: {
   apply('sales_person_id', opts.seller);
   apply('order_channel_id', opts.src);
   apply('sale_type', opts.sale_type);
+  // The trigger keeps payment_status in step with the money, so paid /
+  // part-paid / unpaid is a plain column filter now — no fetching everything
+  // and sieving it in JavaScript, which also broke paging.
+  const PAY_TRACK: Record<string, string> = {
+    paid: 'done', partial: 'processing', unpaid: 'pending',
+  };
+  const states = list(opts.paid).map((x) => PAY_TRACK[x]).filter(Boolean);
+  if (states.length === 1) q = q.eq('payment_status', states[0]);
+  else if (states.length > 1) q = q.in('payment_status', states);
   // Paid / part-paid / unpaid is a comparison between two columns, which
   // PostgREST cannot express — so it is narrowed here after the fetch.
   if (opts.since) q = q.gte('order_date', opts.since);
@@ -275,13 +309,29 @@ export async function orderList(opts: {
     const term = opts.q.replace(/[%,]/g, ' ').trim();
     q = q.or(`customer_name.ilike.%${term}%,phone.ilike.%${term}%`);
   }
-  const { data } = await q;
-  const rows = data ?? [];
-  const wanted = list(opts.paid);
-  if (!wanted.length) return rows;
-  return rows.filter((o) =>
-    wanted.includes(paymentState(Number(o.grand_total ?? 0), Number(o.amount_received ?? 0)))
-  );
+  const { data, count } = await q;
+  // The select string is chosen at runtime, so PostgREST cannot infer the row
+  // shape; the callers know what they asked for.
+  return {
+    rows: (data ?? []) as unknown as Record<string, unknown>[],
+    total: count ?? 0,
+    page,
+    perPage,
+  };
+}
+
+/** The money behind the whole filtered set, not just the page on screen — a
+ *  total that only counts the first fifty rows is worse than no total. */
+export async function orderTotals(opts: Parameters<typeof orderList>[0]) {
+  const { rows } = await orderList({ ...opts, page: 1, perPage: 5000, totalsOnly: true });
+  const live = rows.filter((o) => o.status !== 'cancelled');
+  return {
+    count: live.length,
+    revenue: live.reduce((a, o) => a + Number(o.grand_total ?? 0), 0),
+    outstanding: live.reduce(
+      (a, o) => a + Math.max(0, Number(o.grand_total ?? 0) - Number(o.amount_received ?? 0)), 0
+    ),
+  };
 }
 
 export async function orderPayments(orderId: string) {

@@ -18,7 +18,7 @@ function csvCell(v: unknown): string {
  */
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
-  const rows = await orderList({
+  const { rows } = await orderList({
     status: p.get('status') ?? undefined,
     q: p.get('q') ?? undefined,
     since: p.get('since') ?? undefined,
@@ -30,7 +30,8 @@ export async function GET(req: NextRequest) {
     src: p.get('src') ?? undefined,
     paid: p.get('paid') ?? undefined,
     sale_type: p.get('sale_type') ?? undefined,
-    limit: 5000,
+    perPage: 5000,
+    full: true,
   });
 
   const header = [

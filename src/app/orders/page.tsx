@@ -1,9 +1,12 @@
 import Link from 'next/link';
-import { orderList, shops, paymentChannels, salesPeople, orderChannels } from '@/lib/orders';
+import {
+  orderList, orderTotals, shops, paymentChannels, salesPeople, orderChannels,
+} from '@/lib/orders';
 import { admin } from '@/lib/supabase';
 import { ctx } from '@/lib/server-ctx';
 import { money, num } from '@/components/ui';
 import { paymentState, balanceDue } from '@/lib/order-payment';
+import { Pager } from '@/components/SortHeader';
 import { resolveRange } from '@/lib/range';
 import { RangePicker } from '@/components/RangePicker';
 import { OrderFilters } from '@/components/OrderFilters';
@@ -24,7 +27,7 @@ export default async function Orders({
 }: {
   searchParams: Promise<{
     status?: string; q?: string; shop?: string; by?: string; pay?: string; channel?: string;
-    seller?: string; src?: string; paid?: string; sale_type?: string;
+    seller?: string; src?: string; paid?: string; sale_type?: string; page?: string;
     preset?: string; since?: string; until?: string;
   }>;
 }) {
@@ -32,16 +35,21 @@ export default async function Orders({
   const sp = await searchParams;
   const r = resolveRange(sp);
 
-  const [rows, shopList, channelList, sellerList, srcList, staffRes] = await Promise.all([
-    orderList({
-      status: sp.status, q: sp.q,
-      // A search is a hunt for one specific order, which is usually an old
-      // one — so searching looks past the date window rather than through it.
-      since: sp.q ? undefined : r.since,
-      until: sp.q ? undefined : r.until,
-      shop_id: sp.shop, created_by: sp.by,
-      payment_method: sp.pay, payment_channel_id: sp.channel, seller: sp.seller, src: sp.src, paid: sp.paid, sale_type: sp.sale_type,
-    }),
+  const PER_PAGE = 50;
+  const page = Math.max(1, Number(sp.page ?? 1) || 1);
+
+  const filters = {
+    status: sp.status, q: sp.q,
+    since: sp.q ? undefined : r.since,
+    until: sp.q ? undefined : r.until,
+    shop_id: sp.shop, created_by: sp.by,
+    payment_method: sp.pay, payment_channel_id: sp.channel,
+    seller: sp.seller, src: sp.src, paid: sp.paid, sale_type: sp.sale_type,
+  };
+
+  const [listed, sums, shopList, channelList, sellerList, srcList, staffRes] = await Promise.all([
+    orderList({ ...filters, page, perPage: PER_PAGE }),
+    orderTotals(filters),
     shops(),
     paymentChannels({ all: true }),
     salesPeople({ all: true }),
@@ -52,9 +60,9 @@ export default async function Orders({
   const statuses = ['pending', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled'];
   const payTerms = ['pending', 'cod', 'deposit', 'transfer'];
 
-  // Cancelled orders are shown but never counted — a cancelled sale is not a sale.
-  const live = rows.filter((o) => o.status !== 'cancelled');
-  const total = live.reduce((a, o) => a + Number(o.grand_total ?? 0), 0);
+  const rows = listed.rows;
+  const pages = Math.max(1, Math.ceil(listed.total / PER_PAGE));
+
 
   return (
     <div className="space-y-4">
@@ -121,17 +129,12 @@ export default async function Orders({
       />
 
       <div className="text-sm text-muted">
-        {t('or2_summary', { n: live.length, v: total.toLocaleString() })}
-        {(() => {
-          const owed = live.reduce(
-            (a, o) => a + balanceDue(Number(o.grand_total ?? 0), Number(o.amount_received ?? 0)), 0
-          );
-          return owed > 0 ? (
-            <span className="ml-2 text-bad">
-              · {t('pay_due')} {owed.toLocaleString()} MMK
-            </span>
-          ) : null;
-        })()}
+        {t('or2_summary', { n: sums.count, v: sums.revenue.toLocaleString() })}
+        {sums.outstanding > 0 && (
+          <span className="ml-2 text-bad">
+            · {t('pay_due')} {sums.outstanding.toLocaleString()} MMK
+          </span>
+        )}
         {!sp.q && <span className="ml-2 text-xs">{r.since} → {r.until}</span>}
       </div>
 
@@ -275,6 +278,11 @@ export default async function Orders({
           </tbody>
         </table>
       </div>
+
+      {pages > 1 && (
+        <Pager page={page} pages={pages} total={listed.total}
+          labels={{ prev: t('pg_prev'), next: t('pg_next'), of: t('pg_of') }} />
+      )}
     </div>
   );
 }
