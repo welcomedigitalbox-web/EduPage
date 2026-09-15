@@ -29,6 +29,7 @@ export interface RuleInput {
   discount_value?: number;
   delivery_fee?: number;
   order_channel_id?: string | null;
+  sale_type?: string;
   items: RuleLine[];
 }
 

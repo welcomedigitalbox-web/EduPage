@@ -5,6 +5,7 @@ import {
   validateOrder, orderMoney, requiredAdvance, normalizePhone,
   type FieldKey,
 } from '@/lib/order-rules';
+import { paymentState } from '@/lib/order-payment';
 
 const FIELD =
   'rounded-lg border border-edge bg-ink p-2 text-sm outline-none focus:border-brand';
@@ -27,6 +28,8 @@ export interface OrderFormLabels {
   slip: string; slipAdd: string; slipView: string; slipRemove: string; uploading: string;
   seller: string; pickSeller: string;
   srcChannel: string; pickSrc: string; discAmount: string; discPercent: string;
+  saleType: string; retail: string; wholesale: string;
+  paid: string; partial: string; unpaid: string;
   deliveryMethod: string; deliveryPh: string; orderDate: string; status: string;
   note: string; notePh: string; save: string; saving: string; failed: string;
   errors: Record<string, string>;
@@ -45,7 +48,7 @@ export function OrderForm({
     shop_id: string; order_date: string; delivery_method: string; payment_method: string;
     payment_channel_id: string; payment_ref: string; payment_slip_url: string;
     payment_slips: string[];
-    sales_person_id: string; order_channel_id: string;
+    sales_person_id: string; order_channel_id: string; sale_type: string;
     discount_type: string; discount_value: number;
     advance_payment: number; delivery_fee: number; discount: number; status: string;
     note: string; items: Line[];
@@ -79,6 +82,7 @@ export function OrderForm({
       : (initial.payment_slip_url ? [initial.payment_slip_url] : []) as string[],
     sales_person_id: initial.sales_person_id ?? '',
     order_channel_id: initial.order_channel_id ?? '',
+    sale_type: initial.sale_type ?? 'retail',
     discount_type: initial.discount_type ?? 'amount',
     discount_value: initial.discount_value ?? initial.discount ?? 0,
     advance_payment: initial.advance_payment ?? 0,
@@ -255,6 +259,13 @@ export function OrderForm({
           </select>
         </Field>
         </div>
+        <Field label={labels.saleType}>
+          <select className={INPUT} value={f.sale_type}
+            onChange={(e) => set('sale_type', e.target.value)}>
+            <option value="retail">{labels.retail}</option>
+            <option value="wholesale">{labels.wholesale}</option>
+          </select>
+        </Field>
         <Field label={labels.address}>
           <textarea className={INPUT} rows={2} value={f.delivery_address}
             onChange={(e) => set('delivery_address', e.target.value)} />
@@ -339,7 +350,21 @@ export function OrderForm({
         </section>
 
         <section className="card space-y-3 p-4">
-          <div className="label">{labels.payment}</div>
+          {/* What this order will be the moment it is saved — staff should not
+              have to open it again to find out. */}
+          {(() => {
+            const st = paymentState(money.grand_total, money.advance);
+            const tone = st === 'paid' ? 'border-good text-good'
+              : st === 'partial' ? 'border-brand text-brand' : 'border-bad text-bad';
+            const text = st === 'paid' ? labels.paid
+              : st === 'partial' ? labels.partial : labels.unpaid;
+            return (
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="label">{labels.payment}</div>
+                <span className={`rounded border px-2 py-0.5 text-[11px] ${tone}`}>{text}</span>
+              </div>
+            );
+          })()}
           <div className="grid grid-cols-2 gap-3">
             <Field label={labels.payment}>
               <select className={INPUT} value={f.payment_method}

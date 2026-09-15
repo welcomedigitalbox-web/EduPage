@@ -63,6 +63,8 @@ export default async function CardPage({ params }: { params: Promise<{ id: strin
       rows: ([
         [t('or2_shop'), shop?.name ?? '—'],
         [t('or2_src_channel'), (order.order_channel_name as string) ?? '—'],
+        [t('or2_sale_type'),
+          order.sale_type === 'wholesale' ? t('or2_wholesale') : t('or2_retail')],
         [t('or2_seller'), (order.sales_person_name as string) ?? '—'],
         [t('or2_created_by'), (order.created_by_name as string) ?? '—'],
         order.note ? [t('or2_note'), order.note as string] : null,

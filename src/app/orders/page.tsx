@@ -3,6 +3,7 @@ import { orderList, shops, paymentChannels, salesPeople, orderChannels } from '@
 import { admin } from '@/lib/supabase';
 import { ctx } from '@/lib/server-ctx';
 import { money, num } from '@/components/ui';
+import { paymentState, balanceDue } from '@/lib/order-payment';
 import { resolveRange } from '@/lib/range';
 import { RangePicker } from '@/components/RangePicker';
 import { OrderFilters } from '@/components/OrderFilters';
@@ -23,7 +24,7 @@ export default async function Orders({
 }: {
   searchParams: Promise<{
     status?: string; q?: string; shop?: string; by?: string; pay?: string; channel?: string;
-    seller?: string; src?: string;
+    seller?: string; src?: string; paid?: string; sale_type?: string;
     preset?: string; since?: string; until?: string;
   }>;
 }) {
@@ -39,7 +40,7 @@ export default async function Orders({
       since: sp.q ? undefined : r.since,
       until: sp.q ? undefined : r.until,
       shop_id: sp.shop, created_by: sp.by,
-      payment_method: sp.pay, payment_channel_id: sp.channel, seller: sp.seller, src: sp.src,
+      payment_method: sp.pay, payment_channel_id: sp.channel, seller: sp.seller, src: sp.src, paid: sp.paid, sale_type: sp.sale_type,
     }),
     shops(),
     paymentChannels({ all: true }),
@@ -54,15 +55,6 @@ export default async function Orders({
   // Cancelled orders are shown but never counted — a cancelled sale is not a sale.
   const live = rows.filter((o) => o.status !== 'cancelled');
   const total = live.reduce((a, o) => a + Number(o.grand_total ?? 0), 0);
-
-  /** Keeps every other filter when a status chip is clicked. */
-  const withStatus = (s: string | null) => {
-    const q = new URLSearchParams();
-    for (const [k, v] of Object.entries(sp)) if (v && k !== 'status') q.set(k, String(v));
-    if (s) q.set('status', s);
-    const qs = q.toString();
-    return qs ? `/orders?${qs}` : '/orders';
-  };
 
   return (
     <div className="space-y-4">
@@ -79,6 +71,7 @@ export default async function Orders({
                ).toString()}&since=${r.since}&until=${r.until}`}>
               {t('or2_export')}
             </a>
+            <Link className="btn text-sm" href="/orders/settle">{t('st_link')}</Link>
             <Link className="btn-primary" href="/orders/new">{t('or2_new')}</Link>
           </div>
           <RangePicker
@@ -94,20 +87,8 @@ export default async function Orders({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Link href={withStatus(null)}
-          className={`btn text-xs ${!sp.status ? 'border-brand text-brand' : ''}`}>
-          {t('or2_all_status')}
-        </Link>
-        {statuses.map((s) => (
-          <Link key={s} href={withStatus(s)}
-            className={`btn text-xs ${sp.status === s ? 'border-brand text-brand' : ''}`}>
-            {t(`os_${s}`)}
-          </Link>
-        ))}
-      </div>
-
       <OrderFilters
+        statuses={statuses.map((x) => ({ value: x, label: t(`os_${x}`) }))}
         shops={shopList.map((s) => ({ value: s.id as string, label: s.name as string }))}
         staff={(staffRes.data ?? []).map((u) => ({
           value: u.id as string, label: (u.name as string) || (u.email as string),
@@ -116,19 +97,41 @@ export default async function Orders({
         channels={channelList.map((c) => ({ value: c.id as string, label: c.name as string }))}
         sellers={sellerList.map((p) => ({ value: p.id as string, label: p.name as string }))}
         srcChannels={srcList.map((c) => ({ value: c.id as string, label: c.name as string }))}
+        saleTypes={[
+          { value: 'retail', label: t('or2_retail') },
+          { value: 'wholesale', label: t('or2_wholesale') },
+        ]}
+        payStates={[
+          { value: 'unpaid', label: t('pay_unpaid') },
+          { value: 'partial', label: t('pay_partial') },
+          { value: 'paid', label: t('pay_paid') },
+        ]}
         labels={{
+          status: t('or2_status'), anyStatus: t('or2_all_status'),
           shop: t('or2_shop'), anyShop: t('or2_any_shop'),
           staff: t('or2_by'), anyStaff: t('or2_any_staff'),
           payment: t('or2_payment'), anyPayment: t('or2_any_payment'),
           channel: t('or2_channel'), anyChannel: t('or2_any_channel'),
           seller: t('or2_seller'), anySeller: t('or2_any_seller'),
           srcChannel: t('or2_src_channel'), anySrc: t('or2_any_src'),
+          payState: t('or2_pay_state'), anyPayState: t('or2_any_pay_state'),
+          saleType: t('or2_sale_type'), anySaleType: t('or2_any_sale_type'),
           search: t('or2_search_ph'), clear: t('or2_clear'),
         }}
       />
 
       <div className="text-sm text-muted">
         {t('or2_summary', { n: live.length, v: total.toLocaleString() })}
+        {(() => {
+          const owed = live.reduce(
+            (a, o) => a + balanceDue(Number(o.grand_total ?? 0), Number(o.amount_received ?? 0)), 0
+          );
+          return owed > 0 ? (
+            <span className="ml-2 text-bad">
+              · {t('pay_due')} {owed.toLocaleString()} MMK
+            </span>
+          ) : null;
+        })()}
         {!sp.q && <span className="ml-2 text-xs">{r.since} → {r.until}</span>}
       </div>
 
@@ -137,6 +140,10 @@ export default async function Orders({
         {rows.map((o) => {
           const shop = (o.msgr_shops as { name?: string } | null)?.name;
           const advance = Number(o.advance_payment ?? 0);
+          const received = Number(o.amount_received ?? 0);
+          const pstate = paymentState(Number(o.grand_total ?? 0), received);
+          const ptone = pstate === 'paid' ? 'border-good text-good'
+            : pstate === 'partial' ? 'border-brand text-brand' : 'border-bad text-bad';
           return (
             <li key={o.id as string}>
               <Link href={`/orders/${o.id}`}
@@ -154,13 +161,18 @@ export default async function Orders({
                     {t(`os_${o.status}`)}
                   </span>
                   <span>{shop ?? '—'}</span>
-                  <span>{t(`or2_${o.payment_method}`)}{advance > 0 ? ` · ${advance.toLocaleString()}` : ''}</span>
+                  <span>{t(`or2_${o.payment_method}`)}</span>
+                  <span className={`rounded border px-1.5 py-0.5 ${ptone}`}>
+                    {pstate === 'paid' ? t('pay_paid')
+                      : pstate === 'partial' ? t('pay_partial') : t('pay_unpaid')}
+                  </span>
                   <span className="ml-auto">
                     {new Date(`${o.order_date}T00:00:00`).toLocaleDateString(lang === 'en' ? 'en-GB' : 'my-MM')}
                   </span>
                 </div>
                 <div className="text-[11px] text-muted">
-                  {[(o.sales_person_name as string), (o.order_channel_name as string)]
+                  {[(o.sales_person_name as string), (o.order_channel_name as string),
+                    o.sale_type === 'wholesale' ? t('or2_wholesale') : null]
                     .filter(Boolean).join(' · ') || '—'}
                 </div>
               </Link>
@@ -180,6 +192,7 @@ export default async function Orders({
               <th className="p-3 text-left font-normal">{t('or2_customer')}</th>
               <th className="p-3 text-left font-normal">{t('or2_shop')}</th>
               <th className="p-3 text-left font-normal">{t('or2_payment')}</th>
+              <th className="p-3 text-left font-normal">{t('or2_pay_state')}</th>
               <th className="p-3 text-left font-normal">{t('or2_seller')}</th>
               <th className="p-3 text-left font-normal">{t('or2_src_channel')}</th>
               <th className="p-3 text-left font-normal">{t('or2_source')}</th>
@@ -194,6 +207,11 @@ export default async function Orders({
               const channel = (o.msgr_payment_channels as { name?: string } | null)?.name;
               const items = (o.msgr_order_items as unknown[] | null)?.length ?? 0;
               const advance = Number(o.advance_payment ?? 0);
+              const received = Number(o.amount_received ?? 0);
+              const pstate = paymentState(Number(o.grand_total ?? 0), received);
+              const due = balanceDue(Number(o.grand_total ?? 0), received);
+              const ptone = pstate === 'paid' ? 'border-good text-good'
+                : pstate === 'partial' ? 'border-brand text-brand' : 'border-bad text-bad';
               return (
                 <tr key={o.id as string} className="border-b border-edge/50 last:border-0 hover:bg-edge/30">
                   <td className="p-3">
@@ -216,11 +234,25 @@ export default async function Orders({
                       {advance > 0 && ` · ${advance.toLocaleString()}`}
                     </div>
                   </td>
+                  <td className="p-3">
+                    <span className={`rounded border px-1.5 py-0.5 text-[11px] ${ptone}`}>
+                      {pstate === 'paid' ? t('pay_paid')
+                        : pstate === 'partial' ? t('pay_partial') : t('pay_unpaid')}
+                    </span>
+                    {due > 0 && (
+                      <div className="mt-0.5 text-[11px] text-muted tabular-nums">
+                        {due.toLocaleString()}
+                      </div>
+                    )}
+                  </td>
                   <td className="p-3 text-xs text-muted">
                     {(o.sales_person_name as string) || '—'}
                   </td>
                   <td className="p-3 text-xs text-muted">
                     {(o.order_channel_name as string) || '—'}
+                    {o.sale_type === 'wholesale' && (
+                      <div className="mt-0.5 text-[11px] text-brand">{t('or2_wholesale')}</div>
+                    )}
                   </td>
                   <td className="p-3 text-xs text-muted">
                     {o.source_ad_id ? `ad · ${String(o.source_ad_id).slice(-6)}` : (o.source_type as string) ?? 'organic'}
@@ -238,7 +270,7 @@ export default async function Orders({
               );
             })}
             {!rows.length && (
-              <tr><td colSpan={10} className="p-8 text-center text-muted">{t('or2_none')}</td></tr>
+              <tr><td colSpan={11} className="p-8 text-center text-muted">{t('or2_none')}</td></tr>
             )}
           </tbody>
         </table>

@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { orderDetail, shops, paymentChannels, salesPeople, orderChannels } from '@/lib/orders';
+import {
+  orderDetail, shops, paymentChannels, salesPeople, orderChannels, orderPayments,
+} from '@/lib/orders';
+import { OrderPayments } from '@/components/OrderPayments';
 import { ctx } from '@/lib/server-ctx';
 import { OrderForm } from '@/components/OrderForm';
 import { orderFormLabels } from '@/lib/order-labels';
@@ -70,6 +73,7 @@ export default async function OrderPage({
             payment_slips: (order.payment_slips as string[]) ?? [],
             sales_person_id: (order.sales_person_id as string) ?? '',
             order_channel_id: (order.order_channel_id as string) ?? '',
+            sale_type: (order.sale_type as string) ?? 'retail',
             discount_type: (order.discount_type as string) ?? 'amount',
             discount_value: Number(order.discount_value ?? order.discount ?? 0),
             advance_payment: Number(order.advance_payment),
@@ -94,6 +98,7 @@ export default async function OrderPage({
   const paymentStatus = (order.payment_status as string) ?? 'pending';
   const deliveryStatus = (order.delivery_status as string) ?? 'pending';
   const settings = await getSettings();
+  const payments = await orderPayments(id);
   const { data: history } = await admin()
     .from('msgr_order_events')
     .select('id,track,from_state,to_state,actor_name,created_at')
@@ -138,6 +143,26 @@ export default async function OrderPage({
         </div>
       </div>
 
+      <OrderPayments
+        orderId={id}
+        grandTotal={Number(order.grand_total ?? 0)}
+        received={Number(order.amount_received ?? 0)}
+        rows={payments as never}
+        channels={channels as { id: string; name: string }[]}
+        isManager={role === 'manager'}
+        labels={{
+          title: t('pay_title'), received: t('pay_received'), due: t('pay_due'),
+          paid: t('pay_paid'), partial: t('pay_partial'), unpaid: t('pay_unpaid'),
+          add: t('pay_add'), amount: t('pay_amount'), channel: t('or2_channel'),
+          pickChannel: t('or2_pick_channel'), ref: t('or2_pay_ref'),
+          refPh: t('pay_ref_ph'), date: t('pay_date'), note: t('or2_note'),
+          notePh: t('pay_note_ph'), slip: t('or2_slip'), slipAdd: t('or2_slip_add'),
+          uploading: t('or2_uploading'), save: t('pay_save'), saving: t('pay_saving'),
+          cancel: t('sp_cancel'), del: t('sp_del'), delConfirm: t('pay_del_confirm'),
+          none: t('pay_none'), failed: t('or2_failed'), full: t('pay_full'),
+        }}
+      />
+
       <OrderWorkflow
         orderId={id}
         role={role}
@@ -153,6 +178,7 @@ export default async function OrderPage({
           forwardOnly: t('or2_forward_only'), del: t('or2_delete'),
           delConfirm: t('or2_delete_confirm'), delLocked: t('or2_delete_locked'),
           cancel: t('or2_cancel_order'), notAllowed: t('or2_no_permission'),
+          paymentDerived: t('or2_pay_derived'),
         }}
       />
 
@@ -290,6 +316,8 @@ export default async function OrderPage({
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <Row k={t('or2_order_id')} v={ref} />
             <Row k={t('or2_src_channel')} v={(order.order_channel_name as string) ?? '—'} />
+            <Row k={t('or2_sale_type')}
+              v={order.sale_type === 'wholesale' ? t('or2_wholesale') : t('or2_retail')} />
             <Row k={t('or2_seller')} v={(order.sales_person_name as string) ?? '—'} />
             <Row k={t('or2_created_by')} v={(order.created_by_name as string) ?? '—'} />
             <Row k={t('or2_order_date')} v={dateStr} />

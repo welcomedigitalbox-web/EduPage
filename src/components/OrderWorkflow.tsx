@@ -8,7 +8,7 @@ export interface WorkflowLabels {
   payment: string; delivery: string;
   states: Record<string, string>;
   forwardOnly: string; del: string; delConfirm: string; delLocked: string;
-  cancel: string; notAllowed: string;
+  cancel: string; notAllowed: string; paymentDerived: string;
 }
 
 /** Two step rails. An agent sees one live button — the next step — and the
@@ -37,8 +37,8 @@ export function OrderWorkflow({
     router.refresh();
   }
 
-  const Rail = ({ name, current, title }: {
-    name: 'payment' | 'delivery'; current: string; title: string;
+  const Rail = ({ name, current, title, readOnly }: {
+    name: 'payment' | 'delivery'; current: string; title: string; readOnly?: boolean;
   }) => (
     <div className="space-y-1.5">
       <div className="text-xs text-muted">{title}</div>
@@ -46,7 +46,7 @@ export function OrderWorkflow({
         {TRACK.map((s) => {
           const at = s === current;
           const past = stepIndex(s) < stepIndex(current);
-          const allowed = !at && canSetTrack(role, current, s);
+          const allowed = !readOnly && !at && canSetTrack(role, current, s);
           const tone = at
             ? 'border-brand bg-brand/15 text-brand'
             : past ? 'border-good/50 text-good' : 'border-edge text-muted';
@@ -67,7 +67,11 @@ export function OrderWorkflow({
 
   return (
     <div className="card space-y-3 p-4 print:hidden">
-      <Rail name="payment" current={payment} title={labels.payment} />
+      {/* The payment rail is the arithmetic of the receipts above it, so it is
+          shown rather than clicked — two places to set the same thing is how
+          they end up disagreeing. */}
+      <Rail name="payment" current={payment} title={labels.payment} readOnly />
+      <p className="text-[11px] text-muted">{labels.paymentDerived}</p>
       <Rail name="delivery" current={delivery} title={labels.delivery} />
       {role !== 'manager' && <p className="text-[11px] text-muted">{labels.forwardOnly}</p>}
       {err && <p className="text-xs text-bad">{err}</p>}

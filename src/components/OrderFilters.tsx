@@ -1,69 +1,87 @@
 'use client';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { MultiSelect, type Option } from './MultiSelect';
 
-const SEL =
-  'rounded-lg border border-edge bg-ink px-2 py-1.5 text-xs outline-none focus:border-brand';
-
-export interface FilterOption { value: string; label: string }
+export type FilterOption = Option;
 
 export interface OrderFilterLabels {
+  status: string; anyStatus: string;
   shop: string; anyShop: string;
   staff: string; anyStaff: string;
   payment: string; anyPayment: string;
   channel: string; anyChannel: string;
   seller: string; anySeller: string;
   srcChannel: string; anySrc: string;
+  payState: string; anyPayState: string;
+  saleType: string; anySaleType: string;
   search: string; clear: string;
 }
 
-/** The dropdowns write straight into the URL, so a filtered view can be
- *  bookmarked and sent to someone else — and the range picker's own params
- *  survive because every control copies the query rather than replacing it. */
+const KEYS = ['status', 'shop', 'by', 'pay', 'channel', 'seller', 'src', 'paid',
+              'sale_type', 'q'];
+
+/**
+ * Every filter takes several values, and the status chips that used to sit
+ * above this row are one of them — two controls for the same column only
+ * invited them to contradict each other.
+ */
 export function OrderFilters({
-  shops, staff, payments, channels, sellers, srcChannels, labels,
+  statuses, shops, staff, payments, channels, sellers, srcChannels, payStates,
+  saleTypes, labels,
 }: {
+  statuses: FilterOption[];
   shops: FilterOption[];
   staff: FilterOption[];
   payments: FilterOption[];
   channels: FilterOption[];
   sellers: FilterOption[];
   srcChannels: FilterOption[];
+  payStates: FilterOption[];
+  saleTypes: FilterOption[];
   labels: OrderFilterLabels;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
 
-  function go(key: string, value: string) {
+  const values = (key: string) => (sp.get(key) ?? '').split(',').filter(Boolean);
+
+  function set(key: string, next: string[] | string) {
     const q = new URLSearchParams(sp.toString());
-    value ? q.set(key, value) : q.delete(key);
+    const v = Array.isArray(next) ? next.join(',') : next;
+    v ? q.set(key, v) : q.delete(key);
     router.push(`${pathname}?${q.toString()}`);
   }
 
-  const KEYS = ['shop', 'by', 'pay', 'channel', 'seller', 'src', 'q'];
   const dirty = KEYS.some((k) => sp.get(k));
 
-  const Picker = ({ name, any, options }: { name: string; any: string; options: FilterOption[] }) => (
-    <select className={SEL} value={sp.get(name) ?? ''} onChange={(e) => go(name, e.target.value)}>
-      <option value="">{any}</option>
-      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
-  );
+  const pickers: [string, string, string, FilterOption[]][] = [
+    ['status', labels.status, labels.anyStatus, statuses],
+    ['paid', labels.payState, labels.anyPayState, payStates],
+    ['sale_type', labels.saleType, labels.anySaleType, saleTypes],
+    ['shop', labels.shop, labels.anyShop, shops],
+    ['seller', labels.seller, labels.anySeller, sellers],
+    ['src', labels.srcChannel, labels.anySrc, srcChannels],
+    ['pay', labels.payment, labels.anyPayment, payments],
+    ['channel', labels.channel, labels.anyChannel, channels],
+    ['by', labels.staff, labels.anyStaff, staff],
+  ];
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Picker name="shop" any={labels.anyShop} options={shops} />
-      {sellers.length > 0 && <Picker name="seller" any={labels.anySeller} options={sellers} />}
-      {srcChannels.length > 0 && <Picker name="src" any={labels.anySrc} options={srcChannels} />}
-      <Picker name="by" any={labels.anyStaff} options={staff} />
-      <Picker name="pay" any={labels.anyPayment} options={payments} />
-      {channels.length > 0 && <Picker name="channel" any={labels.anyChannel} options={channels} />}
+      {pickers.map(([key, label, all, options]) => (
+        <MultiSelect key={key} label={label} allLabel={all} options={options}
+          selected={values(key)} onChange={(next) => set(key, next)} />
+      ))}
+
       <input
-        className={`${SEL} w-40`} placeholder={labels.search}
+        className="w-40 rounded-lg border border-edge bg-ink px-2 py-1.5 text-xs outline-none focus:border-brand"
+        placeholder={labels.search}
         defaultValue={sp.get('q') ?? ''}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') go('q', (e.target as HTMLInputElement).value.trim());
+          if (e.key === 'Enter') set('q', (e.target as HTMLInputElement).value.trim());
         }} />
+
       {dirty && (
         <button className="btn text-xs" onClick={() => {
           const q = new URLSearchParams(sp.toString());

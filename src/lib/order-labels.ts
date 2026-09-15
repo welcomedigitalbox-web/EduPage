@@ -21,6 +21,8 @@ export function orderFormLabels(
     payRef: t('or2_pay_ref'), payRefPh: t('or2_pay_ref_ph'),
     seller: t('or2_seller'), pickSeller: t('or2_pick_seller'),
     srcChannel: t('or2_src_channel'), pickSrc: t('or2_pick_src'),
+    saleType: t('or2_sale_type'), retail: t('or2_retail'), wholesale: t('or2_wholesale'),
+    paid: t('pay_paid'), partial: t('pay_partial'), unpaid: t('pay_unpaid'),
     discAmount: t('or2_disc_amount'), discPercent: t('or2_disc_percent'),
     slip: t('or2_slip'), slipAdd: t('or2_slip_add'), slipView: t('or2_slip_view'),
     slipRemove: t('or2_slip_remove'), uploading: t('or2_uploading'),

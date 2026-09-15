@@ -1,5 +1,6 @@
 import { admin } from './supabase';
 import { discountAmount } from './order-rules';
+import { paymentState } from './order-payment';
 
 export interface OrderItem {
   id?: string;
@@ -33,6 +34,7 @@ export interface OrderInput {
   discount_type?: string;
   discount_value?: number;
   order_channel_id?: string | null;
+  sale_type?: string;
   status?: string;
   note?: string | null;
   items: OrderItem[];
@@ -124,11 +126,14 @@ export async function saveOrder(
     sales_person_id: input.sales_person_id || null,
     sales_person_name: sellerName,
     advance_payment: Number(input.advance_payment || 0),
+    // The advance is money in hand, so it counts as received from the start.
+    amount_received: Number(input.advance_payment || 0),
     delivery_fee: Number(input.delivery_fee || 0),
     discount,
     discount_type: input.discount_type === 'percent' ? 'percent' : 'amount',
     discount_value: Number(input.discount_value ?? input.discount ?? 0),
     order_channel_id: input.order_channel_id || null,
+    sale_type: input.sale_type === 'wholesale' ? 'wholesale' : 'retail',
     order_channel_name: channelName,
     subtotal,
     grand_total,
@@ -232,10 +237,16 @@ export async function contactOrders(contactId: string) {
   }[];
 }
 
+/** Comma-separated query params arrive as strings; a filter with one value and
+ *  a filter with five go down the same path. */
+function list(v: string | undefined): string[] {
+  return (v ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+}
+
 export async function orderList(opts: {
   status?: string; q?: string; since?: string; until?: string; limit?: number;
   shop_id?: string; created_by?: string; payment_method?: string; payment_channel_id?: string;
-  seller?: string; src?: string;
+  seller?: string; src?: string; paid?: string; sale_type?: string;
 }) {
   let q = admin()
     .from('msgr_orders')
@@ -243,13 +254,21 @@ export async function orderList(opts: {
     .order('order_date', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(opts.limit ?? 500);
-  if (opts.status) q = q.eq('status', opts.status);
-  if (opts.shop_id) q = q.eq('shop_id', opts.shop_id);
-  if (opts.created_by) q = q.eq('created_by', opts.created_by);
-  if (opts.payment_method) q = q.eq('payment_method', opts.payment_method);
-  if (opts.payment_channel_id) q = q.eq('payment_channel_id', opts.payment_channel_id);
-  if (opts.seller) q = q.eq('sales_person_id', opts.seller);
-  if (opts.src) q = q.eq('order_channel_id', opts.src);
+  const apply = (col: string, raw: string | undefined) => {
+    const vs = list(raw);
+    if (vs.length === 1) q = q.eq(col, vs[0]);
+    else if (vs.length > 1) q = q.in(col, vs);
+  };
+  apply('status', opts.status);
+  apply('shop_id', opts.shop_id);
+  apply('created_by', opts.created_by);
+  apply('payment_method', opts.payment_method);
+  apply('payment_channel_id', opts.payment_channel_id);
+  apply('sales_person_id', opts.seller);
+  apply('order_channel_id', opts.src);
+  apply('sale_type', opts.sale_type);
+  // Paid / part-paid / unpaid is a comparison between two columns, which
+  // PostgREST cannot express — so it is narrowed here after the fetch.
   if (opts.since) q = q.gte('order_date', opts.since);
   if (opts.until) q = q.lte('order_date', opts.until);
   if (opts.q?.trim()) {
@@ -257,6 +276,21 @@ export async function orderList(opts: {
     q = q.or(`customer_name.ilike.%${term}%,phone.ilike.%${term}%`);
   }
   const { data } = await q;
+  const rows = data ?? [];
+  const wanted = list(opts.paid);
+  if (!wanted.length) return rows;
+  return rows.filter((o) =>
+    wanted.includes(paymentState(Number(o.grand_total ?? 0), Number(o.amount_received ?? 0)))
+  );
+}
+
+export async function orderPayments(orderId: string) {
+  const { data } = await admin()
+    .from('msgr_order_payments')
+    .select('id,amount,channel_name,ref,paid_at,note,actor_name,slips')
+    .eq('order_id', orderId)
+    .order('paid_at', { ascending: false })
+    .order('created_at', { ascending: false });
   return data ?? [];
 }
 
