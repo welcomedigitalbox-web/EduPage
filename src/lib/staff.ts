@@ -15,13 +15,12 @@ export interface Staff {
 export async function msgrStaff(): Promise<Staff[]> {
   const { data } = await admin()
     .from('profiles')
-    .select('id,email,full_name,role,department')
+    .select('id,email,role,department')
     .order('email');
 
   const rows = (data ?? []) as {
     id: string;
     email: string | null;
-    full_name?: string | null;
     role: string | null;
     department: string | null;
   }[];
@@ -40,6 +39,6 @@ export async function msgrStaff(): Promise<Staff[]> {
   return rows.flatMap((p) => {
     const role = roleOf(p.role, p.department);
     if (!role) return [];
-    return [{ id: p.id, email: p.email ?? '', name: p.full_name ?? null, role }];
+    return [{ id: p.id, email: p.email ?? '', name: null, role }];
   });
 }

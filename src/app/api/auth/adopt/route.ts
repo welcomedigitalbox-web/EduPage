@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
 
   const { data: profile } = await db
     .from('profiles')
-    .select('id,email,full_name,role,department')
+    .select('id,email,role,department')
     .eq('id', auth.user.id)
     .maybeSingle();
 
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
     await signSession({
       uid: profile.id,
       email: profile.email ?? auth.user.email ?? '',
-      name: (profile as { full_name?: string | null }).full_name ?? null,
+      name: null,
       role: role as Role,
       exp: Date.now() + SESSION_DAYS * 86400_000,
     }),
