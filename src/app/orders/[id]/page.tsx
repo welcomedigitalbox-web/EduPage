@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  orderDetail, shops, paymentChannels, salesPeople, orderChannels, orderPayments,
-} from '@/lib/orders';
+  orderDetail, shops, paymentChannels, salesPeople, orderChannels, orderPayments, shopName } from '@/lib/orders';
 import { OrderPayments } from '@/components/OrderPayments';
 import { ctx } from '@/lib/server-ctx';
 import { OrderForm } from '@/components/OrderForm';
@@ -104,7 +103,7 @@ export default async function OrderPage({
     .select('id,track,from_state,to_state,actor_name,created_at')
     .eq('order_id', id).order('created_at', { ascending: false }).limit(20);
 
-  const shop = (order.msgr_shops as { name?: string; region?: string } | null);
+  const shop = order.stores as { name?: string; display_name?: string | null; region?: string } | null;
   const channel = (order.msgr_payment_channels as { name?: string } | null)?.name;
   const advance = Number(order.advance_payment ?? 0);
   const balance = Number(order.grand_total ?? 0) - advance;
@@ -321,7 +320,7 @@ export default async function OrderPage({
             <Row k={t('or2_seller')} v={(order.sales_person_name as string) ?? '—'} />
             <Row k={t('or2_created_by')} v={(order.created_by_name as string) ?? '—'} />
             <Row k={t('or2_order_date')} v={dateStr} />
-            <Row k={t('or2_shop')} v={shop?.name ?? '—'} />
+            <Row k={t('or2_shop')} v={shopName(shop) ?? '—'} />
             <Row k={t('or2_source')}
               v={order.source_ad_id
                 ? `ad · ${String(order.source_ad_id).slice(-8)}`

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { orderList, paymentChannels } from '@/lib/orders';
+import { orderList, paymentChannels, shopName } from '@/lib/orders';
 import { ctx } from '@/lib/server-ctx';
 import { SettleList } from '@/components/SettleList';
 import { balanceDue } from '@/lib/order-payment';
@@ -27,7 +27,7 @@ export default async function Settle() {
       grand_total: Number(o.grand_total ?? 0),
       amount_received: Number(o.amount_received ?? 0),
       delivery_method: (o.delivery_method as string) ?? null,
-      shop: (o.msgr_shops as { name?: string } | null)?.name ?? null,
+      shop: shopName(o.stores),
       payment_method: o.payment_method as string,
     }))
     .sort((a, b) => a.order_date.localeCompare(b.order_date));
