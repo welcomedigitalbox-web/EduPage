@@ -1,15 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, canOpen, SESSION_COOKIE } from '@/lib/session';
+import { hasSharedSession } from '@/lib/shared-session';
+import { APP_URL } from '@/lib/apps';
 
 export async function middleware(req: NextRequest) {
   const session = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
 
   if (!session) {
-    const url = req.nextUrl.clone();
-    url.pathname = '/login';
-    url.search = req.nextUrl.pathname === '/'
-      ? '' : `?next=${encodeURIComponent(req.nextUrl.pathname)}`;
-    return NextResponse.redirect(url);
+    const here = new URL(req.nextUrl.pathname + req.nextUrl.search, APP_URL.onlineorder);
+
+    // Arriving with a POS sign-in: trade it for an EduPage session. Checking
+    // the token takes a Supabase call, which this edge middleware can't make,
+    // so that happens once in /api/auth/adopt.
+    if (hasSharedSession(req.cookies)) {
+      const url = req.nextUrl.clone();
+      url.pathname = '/api/auth/adopt';
+      url.search = `?next=${encodeURIComponent(here.toString())}`;
+      return NextResponse.redirect(url);
+    }
+
+    // Not signed in anywhere. The POS owns the sign-in screen for all four
+    // apps and will send them back here afterwards.
+    return NextResponse.redirect(
+      `${APP_URL.pos}/login?next=${encodeURIComponent(here.toString())}`
+    );
   }
 
   // An agent who types a manager URL lands back on their own inbox rather
@@ -26,6 +40,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api/webhook|api/cron|api/auth|api/lang|login|privacy|_next|favicon.ico).*)',
+    '/((?!api/webhook|api/cron|api/auth|api/lang|login|no-access|privacy|_next|favicon.ico).*)',
   ],
 };

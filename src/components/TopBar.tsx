@@ -1,6 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import type { Lang } from '@/lib/i18n';
+import { APP_URL } from '@/lib/apps';
 
 export function LangToggle({ lang }: { lang: Lang }) {
   const router = useRouter();
@@ -30,9 +31,11 @@ export function SignOut({ label }: { label: string }) {
     <button
       className="w-full rounded-lg px-3 py-2 text-left text-sm text-muted hover:bg-edge hover:text-white"
       onClick={async () => {
-        await fetch('/api/auth/logout', { method: 'POST' });
-        router.replace('/login');
-        router.refresh();
+        // Signing out clears the shared cookie too, so this ends the session
+        // on the POS and the other apps as well. The route says where to land.
+        const res = await fetch('/api/auth/logout', { method: 'POST' });
+        const { redirect } = (await res.json().catch(() => ({}))) as { redirect?: string };
+        window.location.replace(redirect ?? APP_URL.pos);
       }}>
       {label}
     </button>

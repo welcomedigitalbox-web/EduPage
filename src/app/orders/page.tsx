@@ -2,7 +2,7 @@ import Link from 'next/link';
 import {
   orderList, orderTotals, shops, paymentChannels, salesPeople, orderChannels,
 } from '@/lib/orders';
-import { admin } from '@/lib/supabase';
+import { msgrStaff } from '@/lib/staff';
 import { ctx } from '@/lib/server-ctx';
 import { money, num } from '@/components/ui';
 import { paymentState, balanceDue } from '@/lib/order-payment';
@@ -47,14 +47,14 @@ export default async function Orders({
     seller: sp.seller, src: sp.src, paid: sp.paid, sale_type: sp.sale_type,
   };
 
-  const [listed, sums, shopList, channelList, sellerList, srcList, staffRes] = await Promise.all([
+  const [listed, sums, shopList, channelList, sellerList, srcList, staff] = await Promise.all([
     orderList({ ...filters, page, perPage: PER_PAGE }),
     orderTotals(filters),
     shops(),
     paymentChannels({ all: true }),
     salesPeople({ all: true }),
     orderChannels({ all: true }),
-    admin().from('msgr_users').select('id,name,email').order('name'),
+    msgrStaff(),
   ]);
 
   const statuses = ['pending', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled'];
@@ -98,9 +98,7 @@ export default async function Orders({
       <OrderFilters
         statuses={statuses.map((x) => ({ value: x, label: t(`os_${x}`) }))}
         shops={shopList.map((s) => ({ value: s.id as string, label: s.name as string }))}
-        staff={(staffRes.data ?? []).map((u) => ({
-          value: u.id as string, label: (u.name as string) || (u.email as string),
-        }))}
+        staff={staff.map((u) => ({ value: u.id, label: u.name || u.email }))}
         payments={payTerms.map((p) => ({ value: p, label: t(`or2_${p}`) }))}
         channels={channelList.map((c) => ({ value: c.id as string, label: c.name as string }))}
         sellers={sellerList.map((p) => ({ value: p.id as string, label: p.name as string }))}

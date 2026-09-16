@@ -1,9 +1,10 @@
 import { getSettings, getKb } from '@/lib/crm';
 import { admin } from '@/lib/supabase';
+import { msgrStaff } from '@/lib/staff';
 import { SettingsForm, KbEditor } from '@/components/SettingsForm';
 import { ctx } from '@/lib/server-ctx';
 import { KbPreview } from '@/components/KbPreview';
-import { UserManager } from '@/components/Users';
+import { UserList } from '@/components/Users';
 import { FxRates } from '@/components/FxRates';
 import { PaymentChannels } from '@/components/PaymentChannels';
 import { ReceiptSettings } from '@/components/ReceiptSettings';
@@ -30,8 +31,7 @@ export default async function Settings() {
     paymentChannels({ all: true }), salesPeople({ all: true }), fulfilmentShops(),
     orderChannels({ all: true }),
   ]);
-  const { data: users } = await admin()
-    .from('msgr_users').select('id,email,name,role,is_active,last_login_at').order('created_at');
+  const users = await msgrStaff();
 
   const L = (k: string) => t(k);
   const products = kb.filter((k) => k.kind === 'product');
@@ -179,19 +179,13 @@ export default async function Settings() {
       <section className="space-y-3 lg:col-span-2">
         <h1 className="text-xl font-semibold">{t('us_title')}</h1>
         <p className="text-sm text-muted">{t('us_sub')}</p>
-        <UserManager
-          users={(users ?? []) as never}
+        <UserList
+          users={users}
           meId={session?.uid ?? ''}
           labels={{
             email: L('us_email'), name: L('us_name'), role: L('us_role'),
             agent: L('us_role_agent'), manager: L('us_role_manager'),
             agentHint: L('us_role_agent_hint'), managerHint: L('us_role_manager_hint'),
-            password: L('us_password'), passwordHint: L('us_password_hint'),
-            add: L('us_add'), active: L('us_active'), disabled: L('us_disabled'),
-            disable: L('us_disable'), enable: L('us_enable'), resetPw: L('us_reset_pw'),
-            lastLogin: L('us_last_login'), never: L('us_never'),
-            emailTaken: L('us_email_taken'), pwShort: L('us_pw_short'),
-            saved: L('us_saved'), selfNote: L('us_self_note'),
           }}
         />
       </section>
