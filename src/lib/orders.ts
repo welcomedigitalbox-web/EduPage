@@ -187,20 +187,10 @@ export async function saveOrder(
   return order.id as string;
 }
 
-// A branch as customers should see it. The POS keeps a short name for the
-// till; display_name is the full one EduPage used to hold on its own.
-export function shopName(row: unknown): string | null {
-  const s = row as { name?: string | null; display_name?: string | null } | null;
-  if (!s) return null;
-  return s.display_name || s.name || null;
-}
-
 export async function shops() {
   const { data } = await admin()
-    .from('stores').select('id,name,display_name,region,address')
-    // Warehouses hold stock but never ship to a customer, so they must not
-    // appear as a branch an order can come from.
-    .eq('is_active', true).eq('is_warehouse', false).order('name');
+    .from('msgr_shops').select('id,name,region,address')
+    .eq('is_active', true).order('sort_order');
   return data ?? [];
 }
 
@@ -260,7 +250,7 @@ const LIST_COLUMNS =
   'id,order_no,order_date,status,payment_status,delivery_status,customer_name,phone,' +
   'payment_method,advance_payment,amount_received,grand_total,sale_type,' +
   'sales_person_name,order_channel_name,source_type,source_ad_id,shop_id,' +
-  'stores(name,display_name),msgr_payment_channels(name),msgr_order_items(id)';
+  'msgr_shops(name),msgr_payment_channels(name),msgr_order_items(id)';
 
 export async function orderList(opts: {
   status?: string; q?: string; since?: string; until?: string; limit?: number;
@@ -280,7 +270,7 @@ export async function orderList(opts: {
     .from('msgr_orders')
     .select(
       opts.full
-        ? '*, stores(name,display_name), msgr_payment_channels(name), msgr_order_items(id)'
+        ? '*, msgr_shops(name), msgr_payment_channels(name), msgr_order_items(id)'
         : opts.totalsOnly
           ? 'status,grand_total,amount_received'
           : LIST_COLUMNS,
@@ -358,7 +348,7 @@ export async function orderDetail(id: string) {
   const db = admin();
   const { data: order } = await db
     .from('msgr_orders')
-    .select('*, stores(name,display_name,region), msgr_payment_channels(name,kind)')
+    .select('*, msgr_shops(name,region), msgr_payment_channels(name,kind)')
     .eq('id', id).maybeSingle();
   if (!order) return null;
   const { data: items } = await db

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import {
-  orderList, orderTotals, shops, paymentChannels, salesPeople, orderChannels, shopName } from '@/lib/orders';
+  orderList, orderTotals, shops, paymentChannels, salesPeople, orderChannels,
+} from '@/lib/orders';
 import { msgrStaff } from '@/lib/staff';
 import { ctx } from '@/lib/server-ctx';
 import { money, num } from '@/components/ui';
@@ -138,7 +139,7 @@ export default async function Orders({
       {/* Phones get one block per order; the nine-column table starts at md. */}
       <ul className="space-y-2 md:hidden">
         {rows.map((o) => {
-          const shop = shopName(o.stores);
+          const shop = (o.msgr_shops as { name?: string } | null)?.name;
           const advance = Number(o.advance_payment ?? 0);
           const received = Number(o.amount_received ?? 0);
           const pstate = paymentState(Number(o.grand_total ?? 0), received);
@@ -203,7 +204,7 @@ export default async function Orders({
           </thead>
           <tbody>
             {rows.map((o) => {
-              const shop = shopName(o.stores);
+              const shop = (o.msgr_shops as { name?: string } | null)?.name;
               const channel = (o.msgr_payment_channels as { name?: string } | null)?.name;
               const items = (o.msgr_order_items as unknown[] | null)?.length ?? 0;
               const advance = Number(o.advance_payment ?? 0);

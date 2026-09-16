@@ -39,7 +39,7 @@ export interface OrderFormLabels {
 export function OrderForm({
   shops, channels, sellers, srcChannels, initial, contactId, conversationId, orderId, labels,
 }: {
-  shops: { id: string; name: string; display_name?: string | null; region: string | null }[];
+  shops: { id: string; name: string; region: string | null }[];
   channels: { id: string; name: string; kind: string }[];
   sellers: { id: string; name: string }[];
   srcChannels: { id: string; name: string }[];
@@ -235,7 +235,7 @@ export function OrderForm({
               <option value="">{labels.pickShop}</option>
               {shops.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.display_name || s.name}{s.region ? ` · ${s.region}` : ''}
+                  {s.name}{s.region ? ` · ${s.region}` : ''}
                 </option>
               ))}
             </select>

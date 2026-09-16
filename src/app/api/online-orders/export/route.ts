@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { orderList, shopName } from '@/lib/orders';
+import { orderList } from '@/lib/orders';
 import { cleanAddress } from '@/lib/mm-address';
 import { paymentState, balanceDue } from '@/lib/order-payment';
 
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
       o.city, o.delivery_address,
       clean.region, clean.regionMm, clean.city, clean.township,
       clean.matched ? 'yes' : 'no',
-      shopName(o.stores) ?? '',
+      (o.msgr_shops as { name?: string } | null)?.name ?? '',
       o.sales_person_name ?? '',
       o.order_channel_name ?? '',
       o.sale_type ?? 'retail',

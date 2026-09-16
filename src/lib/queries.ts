@@ -381,14 +381,17 @@ export async function salesReport(since: string, until: string): Promise<SalesRe
     new Date(r.created_at as string).toLocaleDateString('en-CA', { timeZone: 'Asia/Yangon' })
   );
 
-  // Online orders and POS sales now name the same branches, so one lookup
-  // covers both sides of this report.
+  // A store id can belong to either shop list; look in both and merge.
   const storeIds = [...storeMap.keys()].filter((s) => s !== '—');
-  const { data: branches } = storeIds.length
-    ? await db.from('stores').select('id,name,display_name').in('id', storeIds)
-    : { data: [] };
+  const [ownShops, posStores] = storeIds.length
+    ? await Promise.all([
+        db.from('msgr_shops').select('id,name').in('id', storeIds),
+        db.from('stores').select('id,name').in('id', storeIds),
+      ])
+    : [{ data: [] }, { data: [] }];
   const storeName = new Map(
-    (branches ?? []).map((s) => [s.id as string, (s.display_name || s.name) as string])
+    [...(ownShops.data ?? []), ...(posStores.data ?? [])]
+      .map((s) => [s.id as string, s.name as string])
   );
 
   // Lines live in two places — orders taken here, and POS sales — so the

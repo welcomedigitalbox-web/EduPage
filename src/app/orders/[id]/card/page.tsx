@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { orderDetail, shopName } from '@/lib/orders';
+import { orderDetail } from '@/lib/orders';
 import { ctx } from '@/lib/server-ctx';
 import { OrderCardBody, type CardRow } from '@/components/OrderCard';
 import { CopyOrder } from '@/components/CopyOrder';
@@ -21,7 +21,7 @@ export default async function CardPage({ params }: { params: Promise<{ id: strin
   const fmt = (n: unknown) => Number(n ?? 0).toLocaleString();
   const dateStr = new Date(`${order.order_date}T00:00:00`)
     .toLocaleDateString(lang === 'en' ? 'en-GB' : 'my-MM');
-  const shop = order.stores as { name?: string; display_name?: string | null } | null;
+  const shop = order.msgr_shops as { name?: string } | null;
   const channel = (order.msgr_payment_channels as { name?: string } | null)?.name;
   const advance = Number(order.advance_payment ?? 0);
   const balance = Number(order.grand_total ?? 0) - advance;
@@ -61,7 +61,7 @@ export default async function CardPage({ params }: { params: Promise<{ id: strin
     {
       title: t('or2_card_meta'),
       rows: ([
-        [t('or2_shop'), shopName(shop) ?? '—'],
+        [t('or2_shop'), shop?.name ?? '—'],
         [t('or2_src_channel'), (order.order_channel_name as string) ?? '—'],
         [t('or2_sale_type'),
           order.sale_type === 'wholesale' ? t('or2_wholesale') : t('or2_retail')],
