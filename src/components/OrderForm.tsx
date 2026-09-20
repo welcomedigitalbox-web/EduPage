@@ -14,6 +14,7 @@ const BAD = 'border-bad focus:border-bad';
 
 export interface Line {
   barcode: string; description: string; unit_price: number | ''; qty: number | '';
+  product_id?: string | null; variant_id?: string | null;
 }
 
 export interface OrderFormLabels {
@@ -94,8 +95,34 @@ export function OrderForm({
   const [lines, setLines] = useState<Line[]>(
     initial.items?.length
       ? initial.items
-      : [{ barcode: '', description: '', unit_price: '', qty: 1 }]
+      : [{ barcode: '', description: '', unit_price: '', qty: 1, product_id: null, variant_id: null }]
   );
+  type Cat = { product_id: string; variant_id: string | null; label: string; sku: string; price: number };
+  const [catalog, setCatalog] = useState<Cat[]>([]);
+  useEffect(() => {
+    fetch('/api/catalog')
+      .then((r) => r.json())
+      .then((j) => setCatalog(j.items ?? []))
+      .catch(() => setCatalog([]));
+  }, []);
+
+  // Typing or scanning a sku fills the line from the POS catalogue. A line
+  // with no product behind it still sells, it just moves no stock.
+  function pickItem(i: number, code: string) {
+    const hit = catalog.find((c) => c.sku === code);
+    if (!hit) {
+      setLine(i, { barcode: code, product_id: null, variant_id: null });
+      return;
+    }
+    setLine(i, {
+      barcode: code,
+      product_id: hit.product_id,
+      variant_id: hit.variant_id,
+      description: hit.label,
+      unit_price: hit.price,
+    });
+  }
+
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // Errors stay hidden until the first save attempt: flagging an empty form
@@ -194,6 +221,8 @@ export function OrderForm({
           .filter((l) => l.description.trim())
           .map((l) => ({
             barcode: l.barcode || null,
+            product_id: l.product_id ?? null,
+            variant_id: l.variant_id ?? null,
             description: l.description,
             unit_price: Number(l.unit_price || 0),
             qty: Number(l.qty || 0),
@@ -280,7 +309,8 @@ export function OrderForm({
           {lines.map((l, i) => (
             <div key={i} className="grid gap-2 border-b border-edge/60 pb-3 last:border-0 sm:grid-cols-[8rem_1fr_7rem_5rem_7rem_2rem]">
               <input className={INPUT} placeholder={labels.barcode} value={l.barcode}
-                onChange={(e) => setLine(i, { barcode: e.target.value })} />
+                list="pos-catalog"
+                onChange={(e) => pickItem(i, e.target.value)} />
               <input className={INPUT} placeholder={labels.description} value={l.description}
                 onChange={(e) => setLine(i, { description: e.target.value })} />
               <input className={INPUT} type="number" min={0} step="any" inputMode="decimal"
@@ -299,9 +329,15 @@ export function OrderForm({
         </div>
 
         <button className="btn mt-3 text-xs"
-          onClick={() => setLines((p) => [...p, { barcode: '', description: '', unit_price: '', qty: 1 }])}>
+          onClick={() => setLines((p) => [...p, { barcode: '', description: '', unit_price: '', qty: 1, product_id: null, variant_id: null }])}>
           + {labels.addLine}
         </button>
+        <datalist id="pos-catalog">
+          {catalog.map((c) => (
+            <option key={c.product_id + ':' + (c.variant_id ?? '')} value={c.sku}>{c.label}</option>
+          ))}
+        </datalist>
+
         {show('items') && <p className="mt-2 text-xs text-bad">{show('items')}</p>}
       </section>
 

@@ -5,6 +5,8 @@ import { paymentState } from './order-payment';
 export interface OrderItem {
   id?: string;
   barcode: string | null;
+  product_id?: string | null;
+  variant_id?: string | null;
   description: string;
   unit_price: number;
   qty: number;
@@ -73,6 +75,8 @@ export async function saveOrder(
     .filter((i) => i.description?.trim())
     .map((i, idx) => ({
       barcode: i.barcode?.trim() || null,
+      product_id: i.product_id || null,
+      variant_id: i.variant_id || null,
       description: i.description.trim(),
       unit_price: Number(i.unit_price || 0),
       qty: Number(i.qty || 0),
