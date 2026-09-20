@@ -162,18 +162,14 @@ export default async function Settings() {
       </section>
 
       <section className="space-y-3 lg:col-span-2">
-        <PaymentChannels
-          rows={channels as never}
-          labels={{
-            title: t('pc_title'), sub: t('pc_sub'), name: t('pc_name'), namePh: t('pc_name_ph'),
-            kind: t('pc_kind'), wallet: t('pc_wallet'), bank: t('pc_bank'), cash: t('pc_cash'),
-            accountName: t('pc_account_name'), accountNamePh: t('pc_account_name_ph'),
-            accountNo: t('pc_account_no'), accountNoPh: t('pc_account_no_ph'),
-            add: t('pc_add'), save: t('pc_save'), cancel: t('pc_cancel'), edit: t('pc_edit'),
-            del: t('pc_del'), enable: t('pc_enable'), disable: t('pc_disable'),
-            disabled: t('pc_disabled'), empty: t('pc_empty'), inUse: t('pc_in_use'),
-          }}
-        />
+        <h1 className="text-xl font-semibold">{t('pc_title')}</h1>
+        {/* The list is kept in Finance now, so one place decides where money lands. */}
+        <p className="text-sm text-muted">Managed in Finance → Payment Methods.</p>
+        <ul className="text-sm">
+          {(channels as { id: string; name: string; is_active: boolean }[]).map((c) => (
+            <li key={c.id} className={c.is_active ? "" : "opacity-40"}>{c.name}</li>
+          ))}
+        </ul>
       </section>
 
       <section className="space-y-3 lg:col-span-2">
