@@ -6,7 +6,6 @@ import { ctx } from '@/lib/server-ctx';
 import { KbPreview } from '@/components/KbPreview';
 import { UserList } from '@/components/Users';
 import { FxRates } from '@/components/FxRates';
-import { PaymentChannels } from '@/components/PaymentChannels';
 import { ReceiptSettings } from '@/components/ReceiptSettings';
 import { PageConnect } from '@/components/PageConnect';
 import { SalesPeople } from '@/components/SalesPeople';
