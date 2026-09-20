@@ -67,6 +67,11 @@ export function OrderForm({
     setToday(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Yangon' }));
   }, []);
 
+  const [couriers, setCouriers] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    fetch('/api/couriers').then((r) => r.json()).then((j) => setCouriers(j.rows ?? []));
+  }, []);
+
   const [f, setF] = useState({
     customer_name: initial.customer_name ?? '',
     phone: initial.phone ?? '',
@@ -420,8 +425,11 @@ export function OrderForm({
                 onChange={(e) => set('advance_payment', Number(e.target.value))} />
             </Field>
             <Field label={labels.deliveryMethod}>
-              <input className={INPUT} placeholder={labels.deliveryPh} value={f.delivery_method}
-                onChange={(e) => set('delivery_method', e.target.value)} />
+              <select className={INPUT} value={f.delivery_method}
+                onChange={(e) => setF({ ...f, delivery_method: e.target.value })}>
+                <option value="">-</option>
+                {couriers.map((c) => (<option key={c.id} value={c.name}>{c.name}</option>))}
+              </select>
             </Field>
             <Field label={labels.orderDate} err={show('order_date')}>
               <input className={`${INPUT} ${show('order_date') ? BAD : ''}`} type="date"
