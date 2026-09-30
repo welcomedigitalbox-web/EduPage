@@ -139,6 +139,17 @@ export default async function Reports({
         />
       </section>
 
+      <section className="card overflow-x-auto">
+        <div className="label p-3">Sales people</div>
+        <Table
+          head={['Name', t('sr_orders'), t('sr_revenue'), t('sr_aov')]}
+          rows={rep.bySeller.map((x) => [
+            x.name, num(x.orders), money(x.revenue), money(x.aov),
+          ])}
+          empty={t('sr_empty')}
+        />
+      </section>
+
       <DailyReport rows={rep.byDay} />
 
       <section className="card overflow-x-auto">

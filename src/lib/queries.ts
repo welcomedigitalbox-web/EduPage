@@ -343,6 +343,7 @@ export interface SalesReport {
   inquiryPeople: number;    // distinct people over the whole window
   byChannel: { channel: string; orders: number; revenue: number }[];
   topProducts: { name: string; qty: number; revenue: number }[];
+  bySeller: { name: string; orders: number; revenue: number; aov: number }[];
   fromAds: { orders: number; revenue: number };
 }
 
@@ -422,6 +423,23 @@ export async function salesReport(since: string, until: string): Promise<SalesRe
     prodMap.set(k, cur);
   }
 
+  // Who actually made the sale. The name is carried on the order itself, so
+  // a person who has since left the list still appears on last month's sales.
+  const sellerMap = new Map<string, { orders: number; revenue: number }>();
+  for (let i = 0; i < onlineIds.length; i += 200) {
+    const { data } = await db
+      .from('msgr_orders')
+      .select('id,sales_person_name,grand_total')
+      .in('id', onlineIds.slice(i, i + 200));
+    for (const o of (data ?? []) as { sales_person_name: string | null; grand_total: number }[]) {
+      const k = o.sales_person_name?.trim() || '—';
+      const cur = sellerMap.get(k) ?? { orders: 0, revenue: 0 };
+      cur.orders += 1;
+      cur.revenue += Number(o.grand_total || 0);
+      sellerMap.set(k, cur);
+    }
+  }
+
   const adRows = rows.filter((r) => r.ad_id);
 
   // How many people wrote in, day by day. The team counts a person once per
@@ -478,6 +496,9 @@ export async function salesReport(since: string, until: string): Promise<SalesRe
       .sort((a, b) => b.revenue - a.revenue),
     topProducts: [...prodMap].map(([name, v]) => ({ name, ...v }))
       .sort((a, b) => b.revenue - a.revenue).slice(0, 20),
+    bySeller: [...sellerMap].map(([name, v]) => ({
+      name, ...v, aov: v.orders ? v.revenue / v.orders : 0,
+    })).sort((a, b) => b.revenue - a.revenue),
     fromAds: {
       orders: adRows.length,
       revenue: adRows.reduce((a, r) => a + Number(r.total || 0), 0),
