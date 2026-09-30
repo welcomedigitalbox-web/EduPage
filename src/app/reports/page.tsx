@@ -59,7 +59,13 @@ export default async function Reports({
         <Stat label={t('sr_revenue')} value={money(rep.revenue)}
               sub={money(rep.revenueUsd, cur, 2)} delta={d((x) => x.revenue)}
               prev={prev ? t('rg_prev', { v: money(prev.revenue) }) : undefined} />
-        <Stat label={t('sr_aov')} value={money(rep.aov)} delta={d((x) => x.aov)} />
+        <Stat label="Confirmed revenue" value={money(rep.revenueConfirmed)}
+              sub={`${num(rep.ordersConfirmed)} orders`} tone="good"
+              delta={d((x) => x.revenueConfirmed)} />
+        <Stat label="Goods / delivery" value={money(rep.merchandise)}
+              sub={`+ ${money(rep.delivery)} delivery`} />
+        <Stat label={t('sr_aov')} value={money(rep.aovMerchandise)}
+              sub={`${money(rep.aov)} with delivery`} delta={d((x) => x.aovMerchandise)} />
         <Stat label={t('sr_from_ads')} value={num(rep.fromAds.orders)}
               sub={money(rep.fromAds.revenue)}
               delta={d((x) => x.fromAds.orders)} />

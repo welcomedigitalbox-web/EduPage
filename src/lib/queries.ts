@@ -344,6 +344,13 @@ export interface SalesReport {
   byChannel: { channel: string; orders: number; revenue: number }[];
   topProducts: { name: string; qty: number; revenue: number }[];
   bySeller: { name: string; orders: number; revenue: number; aov: number }[];
+  // Revenue split two ways, because "how much did we sell" and "how much did
+  // we collect" are different questions and the shop asks both.
+  merchandise: number;        // goods after discount, no delivery
+  delivery: number;           // delivery charged on to the customer
+  revenueConfirmed: number;   // orders past pending
+  ordersConfirmed: number;
+  aovMerchandise: number | null;
   fromAds: { orders: number; revenue: number };
 }
 
@@ -426,17 +433,39 @@ export async function salesReport(since: string, until: string): Promise<SalesRe
   // Who actually made the sale. The name is carried on the order itself, so
   // a person who has since left the list still appears on last month's sales.
   const sellerMap = new Map<string, { orders: number; revenue: number }>();
+  let merchandise = 0;
+  let delivery = 0;
+  let revenueConfirmed = 0;
+  let ordersConfirmed = 0;
   for (let i = 0; i < onlineIds.length; i += 200) {
     const { data } = await db
       .from('msgr_orders')
-      .select('id,sales_person_name,grand_total')
+      .select('id,sales_person_name,grand_total,subtotal,discount,delivery_fee,status')
       .in('id', onlineIds.slice(i, i + 200));
-    for (const o of (data ?? []) as { sales_person_name: string | null; grand_total: number }[]) {
+    for (const o of (data ?? []) as {
+      sales_person_name: string | null; grand_total: number;
+      subtotal: number; discount: number; delivery_fee: number; status: string;
+    }[]) {
       const k = o.sales_person_name?.trim() || '—';
       const cur = sellerMap.get(k) ?? { orders: 0, revenue: 0 };
       cur.orders += 1;
       cur.revenue += Number(o.grand_total || 0);
       sellerMap.set(k, cur);
+
+      merchandise += Number(o.subtotal || 0) - Number(o.discount || 0);
+      delivery += Number(o.delivery_fee || 0);
+      if (o.status !== 'pending') {
+        revenueConfirmed += Number(o.grand_total || 0);
+        ordersConfirmed += 1;
+      }
+    }
+  }
+
+  for (const r of rows.filter((x) => x.channel !== 'online')) {
+    merchandise += Number(r.total || 0);
+    if (String(r.order_status ?? '') !== 'pending') {
+      revenueConfirmed += Number(r.total || 0);
+      ordersConfirmed += 1;
     }
   }
 
@@ -454,16 +483,11 @@ export async function salesReport(since: string, until: string): Promise<SalesRe
   );
   const inquiries = [...inquiryByDay.values()].reduce((a, b) => a + b, 0);
 
-  const { data: peopleRows } = await db
-    .from('msgr_messages')
-    .select('contact_id')
-    .eq('direction', 'in')
-    .gte('created_at', from)
-    .lte('created_at', to)
-    .limit(50000);
-  const inquiryPeople = new Set(
-    ((peopleRows ?? []) as { contact_id: string }[]).map((r) => r.contact_id)
-  ).size;
+  const { data: peopleCount } = await db.rpc('msgr_inquiry_people', {
+    p_from: since,
+    p_to: until,
+  });
+  const inquiryPeople = Number(peopleCount ?? 0);
 
   // A day with no order still happened, so the chart shows it rather than
   // starting at the first sale and implying the days before it are missing.
@@ -496,6 +520,11 @@ export async function salesReport(since: string, until: string): Promise<SalesRe
       .sort((a, b) => b.revenue - a.revenue),
     topProducts: [...prodMap].map(([name, v]) => ({ name, ...v }))
       .sort((a, b) => b.revenue - a.revenue).slice(0, 20),
+    merchandise,
+    delivery,
+    revenueConfirmed,
+    ordersConfirmed,
+    aovMerchandise: rows.length ? merchandise / rows.length : null,
     bySeller: [...sellerMap].map(([name, v]) => ({
       name, ...v, aov: v.orders ? v.revenue / v.orders : 0,
     })).sort((a, b) => b.revenue - a.revenue),
