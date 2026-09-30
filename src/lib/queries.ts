@@ -338,7 +338,9 @@ export interface SalesReport {
   aov: number | null;
   byStatus: { status: string; orders: number; revenue: number }[];
   byStore: { store_id: string; store_name: string; orders: number; revenue: number }[];
-  byDay: { day: string; orders: number; revenue: number }[];
+  byDay: { day: string; orders: number; revenue: number; inquiries: number }[];
+  inquiries: number;        // people-days, the figure the team reports
+  inquiryPeople: number;    // distinct people over the whole window
   byChannel: { channel: string; orders: number; revenue: number }[];
   topProducts: { name: string; qty: number; revenue: number }[];
   fromAds: { orders: number; revenue: number };
@@ -422,6 +424,38 @@ export async function salesReport(since: string, until: string): Promise<SalesRe
 
   const adRows = rows.filter((r) => r.ad_id);
 
+  // How many people wrote in, day by day. The team counts a person once per
+  // day, so a month's total is the sum of the days, not the distinct people.
+  const { data: inqRows } = await db.rpc('msgr_inquiry_daily', {
+    p_from: since,
+    p_to: until,
+  });
+  const inquiryByDay = new Map<string, number>(
+    ((inqRows ?? []) as { day: string; people: number }[])
+      .map((r) => [String(r.day), Number(r.people)])
+  );
+  const inquiries = [...inquiryByDay.values()].reduce((a, b) => a + b, 0);
+
+  const { data: peopleRows } = await db
+    .from('msgr_messages')
+    .select('contact_id')
+    .eq('direction', 'in')
+    .gte('created_at', from)
+    .lte('created_at', to)
+    .limit(50000);
+  const inquiryPeople = new Set(
+    ((peopleRows ?? []) as { contact_id: string }[]).map((r) => r.contact_id)
+  ).size;
+
+  // A day with no order still happened, so the chart shows it rather than
+  // starting at the first sale and implying the days before it are missing.
+  const allDays: string[] = [];
+  for (let d = new Date(since + 'T00:00:00Z');
+       d <= new Date(until + 'T00:00:00Z');
+       d.setUTCDate(d.getUTCDate() + 1)) {
+    allDays.push(d.toISOString().slice(0, 10));
+  }
+
   return {
     orders: rows.length,
     revenue,
@@ -432,7 +466,14 @@ export async function salesReport(since: string, until: string): Promise<SalesRe
     byStore: [...storeMap].map(([store_id, v]) => ({
       store_id, store_name: storeName.get(store_id) ?? store_id, ...v,
     })).sort((a, b) => b.revenue - a.revenue),
-    byDay: [...dayMap].map(([day, v]) => ({ day, ...v })).sort((a, b) => a.day.localeCompare(b.day)),
+    byDay: allDays.map((day) => ({
+      day,
+      orders: dayMap.get(day)?.orders ?? 0,
+      revenue: dayMap.get(day)?.revenue ?? 0,
+      inquiries: inquiryByDay.get(day) ?? 0,
+    })),
+    inquiries,
+    inquiryPeople,
     byChannel: [...channelMap].map(([channel, v]) => ({ channel, ...v }))
       .sort((a, b) => b.revenue - a.revenue),
     topProducts: [...prodMap].map(([name, v]) => ({ name, ...v }))

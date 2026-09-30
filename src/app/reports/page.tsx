@@ -66,6 +66,11 @@ export default async function Reports({
       </section>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Stat label="Inquiries" value={num(rep.inquiries)}
+              sub={`${num(rep.inquiryPeople)} people`} />
+        <Stat label="Conversion"
+              value={rep.inquiries ? `${(rep.orders / rep.inquiries * 100).toFixed(1)}%` : '—'}
+              sub={`${num(rep.orders)} / ${num(rep.inquiries)}`} />
         <Stat label={t('sr_pending')} value={num(pending?.orders ?? 0)}
               sub={money(pending?.revenue ?? 0)} tone={pending?.orders ? 'warn' : undefined} />
         <Stat label={t('sr_done')} value={num(done.orders)} sub={money(done.revenue)} tone="good" />
@@ -77,6 +82,11 @@ export default async function Reports({
             <div className="label mb-3">{t('sr_chart_orders')}</div>
             <BarChart data={rep.byDay.map((x) => ({ label: x.day.slice(5), value: x.orders }))}
                       color="var(--series-3)" />
+          </div>
+          <div className="card p-4">
+            <div className="label mb-3">Inquiries</div>
+            <BarChart data={rep.byDay.map((x) => ({ label: x.day.slice(5), value: x.inquiries }))}
+                      color="var(--series-2)" />
           </div>
           <div className="card p-4">
             <div className="label mb-3">{t('sr_chart_revenue')}</div>
@@ -129,15 +139,47 @@ export default async function Reports({
         />
       </section>
 
+      <DailyReport rows={rep.byDay} />
+
       <section className="card overflow-x-auto">
         <div className="label p-3">{t('sr_by_day')}</div>
         <Table
-          head={[t('sr_day'), t('sr_orders'), t('sr_revenue')]}
-          rows={[...rep.byDay].reverse().map((x) => [x.day, num(x.orders), money(x.revenue)])}
+          head={[t('sr_day'), 'Inquiries', t('sr_orders'), 'Conv.', t('sr_revenue')]}
+          rows={[...rep.byDay].reverse().map((x) => [
+            x.day,
+            num(x.inquiries),
+            num(x.orders),
+            x.inquiries ? `${(x.orders / x.inquiries * 100).toFixed(0)}%` : '—',
+            money(x.revenue),
+          ])}
           empty={t('sr_empty')}
         />
       </section>
     </div>
+  );
+}
+
+// The line the team types into Viber every night, written out for them.
+function DailyReport({
+  rows,
+}: {
+  rows: { day: string; orders: number; revenue: number; inquiries: number }[];
+}) {
+  const last = [...rows].reverse().find((r) => r.inquiries > 0 || r.orders > 0);
+  if (!last) return null;
+  const [y, m, d] = last.day.split('-');
+  const text = [
+    `Date - ${Number(d)}.${Number(m)}.${y}`,
+    'Online Team',
+    `Inquires -${last.inquiries}`,
+    `Sale Closed -${last.orders}`,
+    `Sale Amount-${Math.round(last.revenue)}`,
+  ].join('\n');
+  return (
+    <section className="card p-4">
+      <div className="label mb-3">Daily report</div>
+      <pre className="whitespace-pre-wrap text-sm leading-6">{text}</pre>
+    </section>
   );
 }
 
