@@ -1,7 +1,15 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
+import * as XLSX from 'xlsx';
+import { AskAnswer } from './AskAnswer';
 
-interface Turn { role: 'user' | 'assistant'; content: string; used?: string[] }
+interface Table { name: string; rows: Record<string, unknown>[] }
+interface Turn {
+  role: 'user' | 'assistant';
+  content: string;
+  used?: string[];
+  tables?: Table[];
+}
 
 export function AskPanel({
   suggestions, labels,
@@ -12,6 +20,7 @@ export function AskPanel({
   const [turns, setTurns] = useState<Turn[]>([]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [turns, busy]);
@@ -19,24 +28,149 @@ export function AskPanel({
   async function send(q: string) {
     const question = q.trim();
     if (!question || busy) return;
-    const next = [...turns, { role: 'user' as const, content: question }];
-    setTurns(next); setText(''); setBusy(true);
+    const next: Turn[] = [...turns, { role: 'user', content: question }];
+    // The assistant's turn exists from the first moment so the answer can be
+    // written into it a piece at a time rather than appearing all at once.
+    setTurns([...next, { role: 'assistant', content: '', used: [], tables: [] }]);
+    setText(''); setBusy(true); setStep('');
+
+    const patch = (fn: (t: Turn) => Turn) =>
+      setTurns((cur) => cur.map((t, i) => (i === cur.length - 1 ? fn(t) : t)));
+
     try {
       const res = await fetch('/api/ask', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ history: next.map(({ role, content }) => ({ role, content })) }),
       });
-      const j = await res.json();
-      setTurns([...next, {
-        role: 'assistant',
-        content: res.ok ? j.answer : `${labels.failed}: ${String(j.error).slice(0, 200)}`,
-        used: j.used,
-      }]);
+
+      // An error comes back as plain JSON; a good answer as a stream of lines.
+      const type = res.headers.get('content-type') || '';
+      if (!res.ok || !type.includes('ndjson')) {
+        const j = await res.json().catch(() => ({ error: res.statusText }));
+        patch((t) => ({ ...t, content: `${labels.failed}: ${String(j.error).slice(0, 300)}` }));
+        return;
+      }
+
+      const reader = res.body!.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let ev: Record<string, unknown>;
+          try { ev = JSON.parse(line); } catch { continue; }
+          if (ev.t === 'delta') {
+            patch((t) => ({ ...t, content: t.content + String(ev.text) }));
+          } else if (ev.t === 'step') {
+            setStep(String(ev.name));
+            patch((t) => ({ ...t, used: [...(t.used ?? []), String(ev.name)] }));
+          } else if (ev.t === 'rows') {
+            patch((t) => ({
+              ...t,
+              tables: [...(t.tables ?? []), { name: String(ev.name), rows: ev.rows as Record<string, unknown>[] }],
+            }));
+          } else if (ev.t === 'error') {
+            patch((t) => ({ ...t, content: t.content || `${labels.failed}: ${String(ev.message)}` }));
+          }
+        }
+      }
     } catch (e) {
-      setTurns([...next, { role: 'assistant', content: `${labels.failed}: ${String(e)}` }]);
+      patch((t) => ({ ...t, content: t.content || `${labels.failed}: ${String(e)}` }));
     } finally {
-      setBusy(false);
+      setBusy(false); setStep('');
     }
+  }
+
+  // Taking the answer away: the words to paste into a message, the figures to
+  // open in Excel, the whole thing on paper as a document of its own.
+  function copyAnswer(t: Turn) {
+    navigator.clipboard?.writeText(t.content);
+  }
+
+  function toExcel(t: Turn, i: number) {
+    if (!t.tables?.length) return;
+    const wb = XLSX.utils.book_new();
+    t.tables.forEach((tbl, k) => {
+      const ws = XLSX.utils.json_to_sheet(tbl.rows);
+      XLSX.utils.book_append_sheet(wb, ws, tbl.name.replace(/[^\w.]/g, '').slice(0, 28) || `Data ${k + 1}`);
+    });
+    const note = XLSX.utils.aoa_to_sheet([
+      ['Question'], [turns[i - 1]?.content || ''],
+      [], ['Answer'], ...t.content.split('\n').map((l) => [l]),
+    ]);
+    XLSX.utils.book_append_sheet(wb, note, 'Answer');
+    XLSX.writeFile(wb, `edupage-ask-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
+  // A document, not a screenshot of the app. The rendered answer is lifted out
+  // of the page and dropped into a clean A4 sheet with a letterhead, so what
+  // comes out of the printer is something that can be handed over.
+  function printAnswer(i: number) {
+    const node = document.getElementById(`edu-ans-${i}`);
+    if (!node) return;
+    const question = turns[i - 1]?.content || '';
+    const today = new Date().toLocaleDateString('en-GB', {
+      timeZone: 'Asia/Yangon', day: '2-digit', month: 'long', year: 'numeric',
+    });
+    const safe = (s: string) => s.replace(/[<>]/g, '');
+
+    const html = `<!doctype html><html><head><meta charset="utf-8">
+<title>${safe(question).slice(0, 80) || 'Edu Baby House'}</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 16mm; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: "Pyidaungsu","Myanmar Text","Noto Sans Myanmar",
+         -apple-system,"Segoe UI",Arial,sans-serif; font-size: 11.5pt; line-height: 1.7;
+         color:#111; background:#fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  header { border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 18px; }
+  header .co { font-size: 14pt; font-weight: 700; letter-spacing: .3px; }
+  header .meta { font-size: 9pt; color:#555; margin-top: 2px; }
+  .q { background:#f4f6f8; border-left:3px solid #94a3b8; padding:8px 12px;
+       font-size:10.5pt; color:#334155; margin-bottom:18px; }
+  h1 { font-size: 15pt; margin: 0 0 10px; }
+  h2 { font-size: 12.5pt; margin: 20px 0 8px; padding-bottom:3px;
+       border-bottom:1px solid #e2e8f0; page-break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 16px 0 6px; page-break-after: avoid; }
+  p, li { margin: 0 0 7px; }
+  ul, ol { margin: 0 0 10px; padding-left: 20px; }
+  table { width:100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 10pt;
+          page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; vertical-align: top; }
+  th { background:#eef2f6; font-weight: 600; }
+  tr:nth-child(even) td { background:#fafbfc; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: 9.5pt; background:#f4f6f8; padding:1px 4px; }
+  pre, details, summary, button { display:none !important; }
+  blockquote { margin:0 0 10px; padding-left:12px; border-left:3px solid #cbd5e1; color:#475569; }
+  footer { margin-top: 24px; border-top:1px solid #cbd5e1; padding-top:6px;
+           font-size: 8.5pt; color:#64748b; display:flex; justify-content:space-between; }
+  a { color:#111; text-decoration: none; }
+</style></head><body>
+<header>
+  <div class="co">Edu Baby House</div>
+  <div class="meta">Online &amp; Page Report · ${today}</div>
+</header>
+${question ? `<div class="q"><b>မေးခွန်း:</b> ${safe(question)}</div>` : ''}
+${node.innerHTML}
+<footer><span>Edu Baby House — onlineorder.edubabyhouse.store</span><span>${today}</span></footer>
+</body></html>`;
+
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument;
+    if (!doc) { document.body.removeChild(frame); return; }
+    doc.open(); doc.write(html); doc.close();
+    // Give the fonts a moment, then hand it to the printer and clean up after.
+    setTimeout(() => {
+      frame.contentWindow?.focus();
+      frame.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(frame), 1000);
+    }, 350);
   }
 
   return (
@@ -55,18 +189,35 @@ export function AskPanel({
 
         {turns.map((t, i) => (
           <div key={i} className={`flex ${t.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] whitespace-pre-wrap rounded-xl px-3 py-2 text-sm ${
-              t.role === 'user' ? 'bg-brand/20' : 'bg-edge'
-            }`}>
-              {t.content}
-              {t.used?.length ? (
-                <div className="mt-1 text-[10px] text-muted">{[...new Set(t.used)].join(' · ')}</div>
-              ) : null}
-            </div>
+            {t.role === 'user' ? (
+              <div className="max-w-[80%] whitespace-pre-wrap rounded-xl bg-brand/20 px-3 py-2 text-sm">
+                {t.content}
+              </div>
+            ) : (
+              <div className="w-full rounded-xl bg-edge/40 px-4 py-3">
+                <div id={`edu-ans-${i}`}><AskAnswer text={t.content} /></div>
+                {t.content && (
+                  <div className="mt-3 flex flex-wrap gap-3 border-t border-edge pt-2 text-xs">
+                    <button className="text-muted hover:text-white" onClick={() => copyAnswer(t)}>Copy</button>
+                    {t.tables?.length ? (
+                      <button className="text-muted hover:text-white" onClick={() => toExcel(t, i)}>Excel</button>
+                    ) : null}
+                    <button className="text-muted hover:text-white" onClick={() => printAnswer(i)}>PDF / Print</button>
+                  </div>
+                )}
+                {t.used?.length ? (
+                  <div className="mt-1 text-[10px] text-muted">{[...new Set(t.used)].join(' · ')}</div>
+                ) : null}
+              </div>
+            )}
           </div>
         ))}
 
-        {busy && <div className="text-sm text-muted">{labels.thinking}</div>}
+        {busy && (
+          <div className="text-sm text-muted">
+            {step ? `${labels.thinking} — ${step}` : labels.thinking}
+          </div>
+        )}
         <div ref={endRef} />
       </div>
 
