@@ -86,6 +86,45 @@ const TOOLS: Anthropic.Tool[] = [
       'Current state of the inbox: how many threads are waiting on a reply, how many the bot flagged for a person, how many follow-up tasks are pending, and the reasons the bot handed threads over.',
     input_schema: { type: 'object', properties: {} },
   },
+  {
+    name: 'get_lost_leads',
+    description:
+      "Conversations in a range that never became an order, with the customer's own last words. Use this for \"why did these not buy\" questions: it returns the lead stage, the reason the bot handed the thread to a person, how long the thread ran, and the last few things the customer actually typed. Read the words before drawing a conclusion.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        since: { type: 'string' },
+        until: { type: 'string' },
+        limit: { type: 'number', description: 'How many conversations to read. Default 40, max 120.' },
+      },
+      required: ['since', 'until'],
+    },
+  },
+  {
+    name: 'search_messages',
+    description:
+      'Search what customers actually wrote. Give a word or phrase (Burmese or English) and a date range; returns the matching inbound messages with the date, the thread they came from, and whether that customer went on to order. Use it to find what people ask about a product, a price, delivery, or a complaint.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        q: { type: 'string', description: 'Word or phrase to look for in the message text.' },
+        since: { type: 'string' },
+        until: { type: 'string' },
+        limit: { type: 'number', description: 'Default 60, max 200.' },
+      },
+      required: ['q', 'since', 'until'],
+    },
+  },
+  {
+    name: 'get_order_lines',
+    description:
+      'The individual product lines of the orders in a range: barcode, description, quantity, unit price, line total, with the order status and city. Use it for "what exactly did they buy", basket size, and which products travel together.',
+    input_schema: {
+      type: 'object',
+      properties: { since: { type: 'string' }, until: { type: 'string' }, limit: { type: 'number' } },
+      required: ['since', 'until'],
+    },
+  },
 ];
 
 async function runTool(name: string, input: Record<string, unknown>): Promise<unknown> {
@@ -141,6 +180,107 @@ async function runTool(name: string, input: Record<string, unknown>): Promise<un
           .map(([reason, n]) => ({ reason, n })),
       };
     }
+    case 'get_lost_leads': {
+      const cap = Math.min(Number(input.limit ?? 40), 120);
+      // Threads that started in the window, and the orders that came out of them.
+      const [convos, orders] = await Promise.all([
+        db.from('msgr_conversations')
+          .select('id,contact_id,status,needs_human_reason,inbound_count,outbound_count,first_response_seconds,created_at,last_message_at')
+          .gte('created_at', `${since}T00:00:00Z`).lte('created_at', `${until}T23:59:59Z`)
+          .order('inbound_count', { ascending: false }).limit(600),
+        db.from('msgr_orders').select('conversation_id,contact_id')
+          .gte('order_date', since).lte('order_date', until).limit(2000),
+      ]);
+      const bought = new Set<string>();
+      for (const o of orders.data ?? []) {
+        if (o.conversation_id) bought.add(String(o.conversation_id));
+        if (o.contact_id) bought.add(String(o.contact_id));
+      }
+      const lost = (convos.data ?? [])
+        .filter((c) => !bought.has(String(c.id)) && !bought.has(String(c.contact_id)))
+        .slice(0, cap);
+      if (!lost.length) return { lost_count: 0, conversations: [] };
+
+      // The customer's own words are the point; the counts alone explain nothing.
+      const msgs = await db.from('msgr_messages')
+        .select('conversation_id,text,sent_at,direction')
+        .in('conversation_id', lost.map((c) => c.id))
+        .eq('direction', 'in')
+        .order('sent_at', { ascending: false })
+        .limit(cap * 6);
+      const byConvo = new Map<string, string[]>();
+      for (const m of msgs.data ?? []) {
+        const k = String(m.conversation_id);
+        const arr = byConvo.get(k) ?? [];
+        if (arr.length < 4 && m.text) arr.push(String(m.text).slice(0, 400));
+        byConvo.set(k, arr);
+      }
+      return {
+        lost_count: lost.length,
+        total_started: (convos.data ?? []).length,
+        conversations: lost.map((c) => ({
+          status: c.status,
+          handoff_reason: c.needs_human_reason,
+          inbound: c.inbound_count,
+          outbound: c.outbound_count,
+          first_response_seconds: c.first_response_seconds,
+          started: c.created_at,
+          last_message_at: c.last_message_at,
+          customer_said: (byConvo.get(String(c.id)) ?? []).reverse(),
+        })),
+      };
+    }
+
+    case 'search_messages': {
+      const q = String(input.q ?? '').trim();
+      if (!q) return { error: 'no search word given' };
+      const cap = Math.min(Number(input.limit ?? 60), 200);
+      const hits = await db.from('msgr_messages')
+        .select('conversation_id,contact_id,text,sent_at')
+        .eq('direction', 'in')
+        .ilike('text', `%${q}%`)
+        .gte('sent_at', `${since}T00:00:00Z`).lte('sent_at', `${until}T23:59:59Z`)
+        .order('sent_at', { ascending: false }).limit(cap);
+      const rows = hits.data ?? [];
+      const ids = [...new Set(rows.map((r) => String(r.contact_id)).filter(Boolean))];
+      const orders = ids.length
+        ? await db.from('msgr_orders').select('contact_id').in('contact_id', ids).limit(2000)
+        : { data: [] as { contact_id: string }[] };
+      const bought = new Set((orders.data ?? []).map((o) => String(o.contact_id)));
+      return {
+        match_count: rows.length,
+        messages: rows.map((r) => ({
+          sent_at: r.sent_at,
+          text: String(r.text ?? '').slice(0, 500),
+          customer_ordered: bought.has(String(r.contact_id)),
+        })),
+      };
+    }
+
+    case 'get_order_lines': {
+      const cap = Math.min(Number(input.limit ?? 300), 800);
+      const ords = await db.from('msgr_orders')
+        .select('id,order_no,order_date,status,city,grand_total')
+        .gte('order_date', since).lte('order_date', until).limit(cap);
+      const list = ords.data ?? [];
+      if (!list.length) return { order_count: 0, lines: [] };
+      const lines = await db.from('msgr_order_items')
+        .select('order_id,barcode,description,qty,unit_price,line_total')
+        .in('order_id', list.map((o) => o.id)).limit(3000);
+      const head = new Map(list.map((o) => [String(o.id), o]));
+      return {
+        order_count: list.length,
+        lines: (lines.data ?? []).map((l) => {
+          const o = head.get(String(l.order_id));
+          return {
+            order_no: o?.order_no, order_date: o?.order_date, status: o?.status, city: o?.city,
+            barcode: l.barcode, description: l.description,
+            qty: Number(l.qty), unit_price: Number(l.unit_price), line_total: Number(l.line_total),
+          };
+        }),
+      };
+    }
+
     default:
       return { error: `unknown tool ${name}` };
   }
@@ -187,6 +327,27 @@ WHAT THE NUMBERS MEAN
   If a total looks low against what the owner expects, say that.
 - A "lead" is a contact who messaged; "engaged" is one who got past the first reply.
   Do not treat the two as the same number.
+
+WHY A LEAD DID NOT BUY
+These questions are the reason get_lost_leads and search_messages exist, and they
+are answered by reading, not by counting.
+- Pull the lost conversations for the period, read what the customers actually
+  wrote, and sort the threads into reasons in their own words: price, stock,
+  delivery cost or time, size or colour, no reply / replied too late, just looking,
+  bought elsewhere, payment. Invent no category the messages do not support.
+- Give a table: reason, how many threads, share of the lost total, and one short
+  real quote from a customer for each row. The quote is what makes a manager
+  believe the row.
+- Separate what the shop did wrong (slow or no reply, no answer about price,
+  thread abandoned) from what it could not control (customer only browsing, out
+  of budget). Say which group is bigger — that is the whole answer to "can we fix
+  it".
+- Then, and only then, write a short "ဝန်ထမ်း သင်တန်းအတွက်" list: the two or three
+  specific things to say or do differently, each tied to the reason it fixes and
+  the number of threads it would have affected. Generic selling advice is worthless
+  here; every point must come from a thread you read.
+- Reply speed is measurable: first_response_seconds comes back with each thread.
+  If slow replies and lost threads line up, say so with the figure.
 
 HOW THE ANSWER LOOKS
 7. Write in markdown. Put every set of figures in a markdown pipe table with a header
