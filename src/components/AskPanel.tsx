@@ -9,7 +9,13 @@ interface Turn {
   content: string;
   used?: string[];
   tables?: Table[];
+  email?: string | null;
 }
+interface Chat { id: string; title: string | null; email: string | null; updated_at: string }
+
+// Everyone sees everyone's threads: a figure looked up once should not be paid
+// for twice, and an answer nobody can find again may as well not exist.
+const who = (e?: string | null) => (e ? e.split('@')[0] : '');
 
 export function AskPanel({
   suggestions, labels,
@@ -21,9 +27,45 @@ export function AskPanel({
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState('');
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [chatId, setChatId] = useState<string | null>(null);
+  const [showSide, setShowSide] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [turns, busy]);
+  useEffect(() => { loadChats(); }, []);
+
+  async function loadChats() {
+    try {
+      const r = await fetch('/api/ask/history');
+      const j = await r.json();
+      setChats(j.chats ?? []);
+    } catch { /* the list is a convenience */ }
+  }
+
+  async function openChat(id: string) {
+    setBusy(true); setShowSide(false);
+    try {
+      const r = await fetch(`/api/ask/history?id=${id}`);
+      const j = await r.json();
+      setTurns((j.messages ?? []).map((m: Record<string, unknown>) => ({
+        role: m.role as 'user' | 'assistant',
+        content: String(m.content ?? ''),
+        tables: (m.tables as Table[]) ?? [],
+        used: (m.used as string[]) ?? [],
+        email: (m.email as string) ?? null,
+      })));
+      setChatId(id);
+    } finally { setBusy(false); }
+  }
+
+  async function removeChat(id: string) {
+    await fetch(`/api/ask/history?id=${id}`, { method: 'DELETE' });
+    if (id === chatId) { setChatId(null); setTurns([]); }
+    loadChats();
+  }
+
+  function newChat() { setChatId(null); setTurns([]); setShowSide(false); }
 
   async function send(q: string) {
     const question = q.trim();
@@ -40,8 +82,13 @@ export function AskPanel({
     try {
       const res = await fetch('/api/ask', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ history: next.map(({ role, content }) => ({ role, content })) }),
+        body: JSON.stringify({
+          chatId,
+          history: next.map(({ role, content }) => ({ role, content })),
+        }),
       });
+      const thread = res.headers.get('x-chat-id');
+      if (thread && thread !== chatId) setChatId(thread);
 
       // An error comes back as plain JSON; a good answer as a stream of lines.
       const type = res.headers.get('content-type') || '';
@@ -83,6 +130,7 @@ export function AskPanel({
       patch((t) => ({ ...t, content: t.content || `${labels.failed}: ${String(e)}` }));
     } finally {
       setBusy(false); setStep('');
+      loadChats();
     }
   }
 
@@ -173,8 +221,44 @@ ${node.innerHTML}
     }, 350);
   }
 
+  const sidebar = (
+    <div className="flex h-full flex-col">
+      <button onClick={newChat}
+        className="btn mb-3 w-full text-left text-sm">＋ မေးခွန်းအသစ်</button>
+      <div className="mb-1 px-1 text-xs text-muted">History</div>
+      <div className="flex-1 space-y-0.5 overflow-y-auto">
+        {chats.map((c) => (
+          <div key={c.id}
+            className={`group flex items-center rounded-lg ${c.id === chatId ? 'bg-edge' : 'hover:bg-edge/50'}`}>
+            <button onClick={() => openChat(c.id)} className="flex-1 px-3 py-2 text-left">
+              <div className="truncate text-sm">{c.title || 'Untitled'}</div>
+              <div className="text-[10px] text-muted">{who(c.email)}</div>
+            </button>
+            <button onClick={() => removeChat(c.id)}
+              className="px-2 text-xs text-muted opacity-0 hover:text-red-400 group-hover:opacity-100">✕</button>
+          </div>
+        ))}
+        {!chats.length && <div className="px-3 py-2 text-xs text-muted">မေးထားတာ မရှိသေးပါ</div>}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="card flex h-[70vh] flex-col lg:h-[calc(100vh-9rem)]">
+    <div className="flex gap-4">
+      <aside className="card hidden w-60 shrink-0 p-3 md:block lg:h-[calc(100vh-9rem)]">{sidebar}</aside>
+
+      {showSide && (
+        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setShowSide(false)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <aside className="absolute bottom-0 left-0 top-0 w-72 bg-ink p-4"
+            onClick={(e) => e.stopPropagation()}>{sidebar}</aside>
+        </div>
+      )}
+
+    <div className="card flex h-[70vh] min-w-0 flex-1 flex-col lg:h-[calc(100vh-9rem)]">
+      <div className="flex items-center gap-2 border-b border-edge px-3 py-2 md:hidden">
+        <button onClick={() => setShowSide(true)} className="btn text-sm">☰ History</button>
+      </div>
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {!turns.length && (
           <div className="space-y-2">
@@ -190,8 +274,9 @@ ${node.innerHTML}
         {turns.map((t, i) => (
           <div key={i} className={`flex ${t.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             {t.role === 'user' ? (
-              <div className="max-w-[80%] whitespace-pre-wrap rounded-xl bg-brand/20 px-3 py-2 text-sm">
-                {t.content}
+              <div className="max-w-[80%] rounded-xl bg-brand/20 px-3 py-2 text-sm">
+                <div className="whitespace-pre-wrap">{t.content}</div>
+                {t.email && <div className="mt-1 text-[10px] text-muted">{who(t.email)}</div>}
               </div>
             ) : (
               <div className="w-full rounded-xl bg-edge/40 px-4 py-3">
@@ -233,6 +318,7 @@ ${node.innerHTML}
             onClick={() => send(text)}>{labels.send}</button>
         </div>
       </div>
+    </div>
     </div>
   );
 }

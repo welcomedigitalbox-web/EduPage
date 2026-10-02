@@ -18,17 +18,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'manager only' }, { status: 403 });
   }
 
-  const { history } = (await req.json()) as { history?: AskTurn[] };
+  const { history, chatId } = (await req.json()) as { history?: AskTurn[]; chatId?: string | null };
   if (!history?.length) return NextResponse.json({ error: 'empty' }, { status: 400 });
 
   const lang = normaliseLang(c.get(LANG_COOKIE)?.value);
+  const db = admin();
+  const question = history[history.length - 1]?.content ?? '';
 
-  // Logged like any other model call so the AI usage page stays honest. The
-  // write happens as the stream closes, which is the only point the real token
-  // counts are known.
-  const stream = askStream(history.slice(-12), lang, async (usage) => {
+  // The thread is opened before the answer is written, so a question that fails
+  // half way still leaves a trace of what was asked.
+  let thread = chatId ?? null;
+  try {
+    if (!thread) {
+      const { data } = await db.from('msgr_ask_chats')
+        .insert({ title: question.slice(0, 80), email: session.email })
+        .select('id').single();
+      thread = data?.id ?? null;
+    } else {
+      await db.from('msgr_ask_chats').update({ updated_at: new Date().toISOString() }).eq('id', thread);
+    }
+    if (thread) {
+      await db.from('msgr_ask_messages')
+        .insert({ chat_id: thread, role: 'user', content: question, email: session.email });
+    }
+  } catch {
+    // The history is a convenience; it must never cost the owner their answer.
+  }
+
+  const stream = askStream(history.slice(-12), lang, async (usage, answer) => {
+    // Logged like any other model call so the AI usage page stays honest, and
+    // kept so another manager can find the answer tomorrow.
     try {
-      await admin().from('msgr_ai_runs').insert({
+      await db.from('msgr_ai_runs').insert({
         model: process.env.AI_MODEL ?? 'claude-sonnet-4-5',
         intent: 'dashboard_question',
         action: 'replied',
@@ -36,9 +57,13 @@ export async function POST(req: NextRequest) {
         output_tokens: usage.output_tokens,
         cache_read_tokens: usage.cache_read,
       });
-    } catch {
-      // Accounting must never cost the owner their answer.
-    }
+    } catch { /* accounting never blocks the answer */ }
+    try {
+      if (thread && answer.trim()) {
+        await db.from('msgr_ask_messages')
+          .insert({ chat_id: thread, role: 'assistant', content: answer, email: session.email });
+      }
+    } catch { /* same */ }
   });
 
   return new Response(stream, {
@@ -46,6 +71,7 @@ export async function POST(req: NextRequest) {
       'content-type': 'application/x-ndjson; charset=utf-8',
       'cache-control': 'no-store, no-transform',
       'x-accel-buffering': 'no',
+      ...(thread ? { 'x-chat-id': thread } : {}),
     },
   });
 }

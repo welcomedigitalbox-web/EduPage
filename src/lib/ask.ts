@@ -463,7 +463,7 @@ function tablesFrom(name: string, out: unknown): { name: string; rows: Record<st
 export function askStream(
   history: AskTurn[],
   language: string,
-  onFinish?: (usage: AskUsage) => void | Promise<void>,
+  onFinish?: (usage: AskUsage, answer: string) => void | Promise<void>,
 ): ReadableStream<Uint8Array> {
   const today = localDay(new Date());
   const system = systemPrompt(today, language);
@@ -480,6 +480,7 @@ export function askStream(
 
   const enc = new TextEncoder();
   const used: string[] = [];
+  let answer = '';
   let inTok = 0, outTok = 0, cacheTok = 0;
 
   return new ReadableStream<Uint8Array>({
@@ -517,6 +518,7 @@ export function askStream(
               const d = ev.delta;
               if (d.type === 'text_delta' && last?.type === 'text') {
                 last.text += d.text;
+                answer += d.text;
                 send({ t: 'delta', text: d.text });
               } else if (d.type === 'thinking_delta' && last?.type === 'thinking') {
                 last.thinking += d.thinking;
@@ -541,7 +543,7 @@ export function askStream(
 
           const calls = blocks.filter((b): b is Anthropic.ToolUseBlockParam => b.type === 'tool_use');
           if (!calls.length) {
-            await onFinish?.({ input_tokens: inTok, output_tokens: outTok, cache_read: cacheTok });
+            await onFinish?.({ input_tokens: inTok, output_tokens: outTok, cache_read: cacheTok }, answer);
             send({ t: 'done', used, usage: { input_tokens: inTok, output_tokens: outTok, cache_read: cacheTok } });
             ctrl.close();
             return;
