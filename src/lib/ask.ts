@@ -181,7 +181,7 @@ async function runTool(name: string, input: Record<string, unknown>): Promise<un
       };
     }
     case 'get_lost_leads': {
-      const cap = Math.min(Number(input.limit ?? 40), 120);
+      const cap = Math.min(Number(input.limit ?? 25), 60);
       // Threads that started in the window, and the orders that came out of them.
       const [convos, orders] = await Promise.all([
         db.from('msgr_conversations')
@@ -212,7 +212,7 @@ async function runTool(name: string, input: Record<string, unknown>): Promise<un
       for (const m of msgs.data ?? []) {
         const k = String(m.conversation_id);
         const arr = byConvo.get(k) ?? [];
-        if (arr.length < 4 && m.text) arr.push(String(m.text).slice(0, 400));
+        if (arr.length < 3 && m.text) arr.push(String(m.text).slice(0, 250));
         byConvo.set(k, arr);
       }
       return {
@@ -485,7 +485,15 @@ export function askStream(
 
   return new ReadableStream<Uint8Array>({
     async start(ctrl) {
-      const send = (o: unknown) => ctrl.enqueue(enc.encode(JSON.stringify(o) + '\n'));
+      let closed = false;
+      const send = (o: unknown) => {
+        if (closed) return;
+        try { ctrl.enqueue(enc.encode(JSON.stringify(o) + '\n')); } catch { closed = true; }
+      };
+      // A proxy that sees nothing for a while assumes the connection is dead and
+      // cuts it. While the model is thinking or a tool is running, nothing is
+      // written, so a line of its own goes down the wire to keep the pipe open.
+      const beat = setInterval(() => send({ t: 'ping' }), 8000);
       try {
         for (let round = 0; round < 8; round++) {
           const stream = await client().messages.create({
@@ -545,7 +553,7 @@ export function askStream(
           if (!calls.length) {
             await onFinish?.({ input_tokens: inTok, output_tokens: outTok, cache_read: cacheTok }, answer);
             send({ t: 'done', used, usage: { input_tokens: inTok, output_tokens: outTok, cache_read: cacheTok } });
-            ctrl.close();
+            clearInterval(beat); closed = true; ctrl.close();
             return;
           }
 
@@ -571,10 +579,10 @@ export function askStream(
         }
 
         send({ t: 'error', message: 'မေးခွန်းက ရှုပ်ထွေးလွန်းပါတယ် — ပိုတိကျအောင် ပြန်မေးကြည့်ပါ။' });
-        ctrl.close();
+        clearInterval(beat); closed = true; ctrl.close();
       } catch (e) {
         send({ t: 'error', message: String(e) });
-        ctrl.close();
+        clearInterval(beat); closed = true; ctrl.close();
       }
     },
   });
