@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
   if (req.nextUrl.searchParams.get('probe')) {
     const page = await probeMetrics([
       // Reach candidates, newest naming first
+      'page_total_media_view_unique', 'page_media_view',
       'page_daily_reach', 'page_reach', 'page_content_reach',
       'page_total_reach', 'page_organic_reach', 'page_engaged_users',
       'page_content_activity', 'page_total_actions',
@@ -37,6 +38,7 @@ export async function GET(req: NextRequest) {
       .select('post_id').order('created_time', { ascending: false }).limit(1).maybeSingle();
     const post = p?.post_id
       ? await probePostMetrics(p.post_id, [
+          'post_total_media_view_unique', 'post_media_view',
           'post_impressions', 'post_impressions_unique', 'post_reach',
           'post_clicks', 'post_video_views', 'post_reactions_by_type_total',
           'post_activity', 'post_engaged_users', 'post_video_avg_time_watched',
@@ -63,6 +65,7 @@ export async function GET(req: NextRequest) {
   const today = fmt(new Date());
   const rows = daily.days.map((d) => ({
     date: d.date,
+    reach: d.reach,
     engagements: d.engagements,
     video_views: d.video_views,
     new_follows: d.new_follows,

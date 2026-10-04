@@ -118,6 +118,8 @@ export async function probePostMetrics(postId: string, metrics: string[]) {
 
 export interface PageDay {
   date: string;
+  /** Unique people who saw the page's content that day (Meta's "Viewers"). */
+  reach: number;
   engagements: number;
   video_views: number;
   new_follows: number;
@@ -132,9 +134,12 @@ export async function fetchPageDaily(since: string, until: string): Promise<{
   const token = await pageToken();
   const warnings: string[] = [];
 
-  // Only names Meta still honours. Reach and impressions were retired and
-  // have no replacement, so they are simply not reported any more.
+  // Only names Meta still honours. Graph API v25 retired page_impressions_unique;
+  // its stand-in is page_total_media_view_unique ("Viewers"). Not a 1:1
+  // match — Meta counts unique media viewers rather than reach — but it is
+  // the denominator the engagement rate needs.
   const wanted: [keyof Omit<PageDay, 'date'>, string][] = [
+    ['reach', 'page_total_media_view_unique'],
     ['engagements', 'page_post_engagements'],
     ['video_views', 'page_video_views'],
     ['new_follows', 'page_daily_follows'],
@@ -157,6 +162,7 @@ export async function fetchPageDaily(since: string, until: string): Promise<{
 
   const days: PageDay[] = [...dates].sort().map((date) => ({
     date,
+    reach: series.reach?.[date] ?? 0,
     engagements: series.engagements?.[date] ?? 0,
     video_views: series.video_views?.[date] ?? 0,
     new_follows: series.new_follows?.[date] ?? 0,
@@ -186,6 +192,8 @@ export interface PostRow {
   message: string | null;
   permalink: string | null;
   media_type: string | null;
+  /** Unique viewers of the post (post_total_media_view_unique). 0 when not fetched. */
+  reach: number;
   reactions: number;
   comments: number;
   shares: number;
@@ -250,6 +258,7 @@ export async function fetchPosts(
       reactions: p.reactions?.summary?.total_count ?? 0,
       comments: p.comments?.summary?.total_count ?? 0,
       shares: p.shares?.count ?? 0,
+      reach: 0,
       video_views: 0,
       clicks: 0,
       avg_watch_ms: 0,
@@ -272,6 +281,17 @@ export async function fetchPosts(
         }
       } catch {
         // A post Meta does not measure still belongs in the table.
+      }
+      // Asked on its own: Meta rejects a whole request when one metric in it
+      // is unknown, and this is the newest name in the list.
+      try {
+        const rp = new URLSearchParams({ metric: 'post_total_media_view_unique', access_token: token });
+        const r = await fetch(`${graph(`${p.id}/insights`)}?${rp}`);
+        const j = await r.json() as { data?: { name: string; values: { value: number }[] }[] };
+        const v = j.data?.find((m) => m.name === 'post_total_media_view_unique')?.values?.[0]?.value;
+        if (v != null) row.reach = Number(v);
+      } catch {
+        // No viewer count: reach stays 0 and the post is left out of the rate.
       }
     }
     posts.push(row);
