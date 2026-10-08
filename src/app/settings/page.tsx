@@ -1,6 +1,6 @@
 import { getSettings, getKb } from '@/lib/crm';
 import { admin } from '@/lib/supabase';
-import { msgrStaff } from '@/lib/staff';
+import { msgrStaff, msgrCandidates } from '@/lib/staff';
 import { SettingsForm, KbEditor } from '@/components/SettingsForm';
 import { ctx } from '@/lib/server-ctx';
 import { KbPreview } from '@/components/KbPreview';
@@ -31,6 +31,7 @@ export default async function Settings() {
     orderChannels({ all: true }),
   ]);
   const users = await msgrStaff();
+  const candidates = await msgrCandidates();
 
   const L = (k: string) => t(k);
   const products = kb.filter((k) => k.kind === 'product');
@@ -176,6 +177,7 @@ export default async function Settings() {
         <p className="text-sm text-muted">{t('us_sub')}</p>
         <UserList
           users={users}
+          candidates={candidates}
           meId={session?.uid ?? ''}
           labels={{
             email: L('us_email'), name: L('us_name'), role: L('us_role'),
