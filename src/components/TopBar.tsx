@@ -29,7 +29,7 @@ export function SignOut({ label }: { label: string }) {
   const router = useRouter();
   return (
     <button
-      className="w-full rounded-lg px-3 py-2 text-left text-sm text-muted hover:bg-edge hover:text-white"
+      className="w-full rounded-lg px-3 py-2 text-left text-sm text-muted hover:bg-edge hover:text-slate-900"
       onClick={async () => {
         // Signing out clears the shared cookie too, so this ends the session
         // on the POS and the other apps as well. The route says where to land.
