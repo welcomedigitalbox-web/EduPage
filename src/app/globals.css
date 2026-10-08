@@ -2,17 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Light, whatever the operating system prefers. A shop screen is read in
+   daylight and next to the ERP, and the two should match. */
 :root {
-  color-scheme: dark;
-  --surface-1: #171a21;
+  color-scheme: light;
+  --surface-1: #ffffff;
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
 }
 
 html, body {
-  background: #0f1115;
-  color: #e7e9ee;
+  background: #f8fafc;
+  color: #0f172a;
   font-family: ui-sans-serif, system-ui, "Segoe UI", "Padauk", "Myanmar Text", sans-serif;
 }
 
@@ -21,7 +23,7 @@ html, body {
 .btn { @apply rounded-lg px-3 py-1.5 text-sm border border-edge bg-panel hover:border-brand transition; }
 .btn-primary { @apply rounded-lg px-3 py-1.5 text-sm bg-brand text-white hover:opacity-90 transition; }
 
-/* Printing an order should give a plain sheet, not the dark app chrome. */
+/* Printing an order should give a plain sheet, not the app chrome. */
 @media print {
   body { background: #fff !important; color: #000 !important; }
   aside, nav, header.app-header { display: none !important; }

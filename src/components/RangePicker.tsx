@@ -55,13 +55,13 @@ export function RangePicker({
             {labels.from}
             <input type="date" value={draft.since}
               onChange={(e) => setDraft({ ...draft, since: e.target.value })}
-              className="ml-1 rounded border border-edge bg-ink p-1 text-xs text-white" />
+              className="ml-1 rounded border border-edge bg-ink p-1 text-xs text-slate-900" />
           </label>
           <label className="text-[11px] text-muted">
             {labels.to}
             <input type="date" value={draft.until}
               onChange={(e) => setDraft({ ...draft, until: e.target.value })}
-              className="ml-1 rounded border border-edge bg-ink p-1 text-xs text-white" />
+              className="ml-1 rounded border border-edge bg-ink p-1 text-xs text-slate-900" />
           </label>
           <button className="btn-primary text-xs"
             onClick={() => go({ preset: 'custom', since: draft.since, until: draft.until })}>

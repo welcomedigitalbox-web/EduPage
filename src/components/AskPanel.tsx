@@ -283,11 +283,11 @@ ${node.innerHTML}
                 <div id={`edu-ans-${i}`}><AskAnswer text={t.content} /></div>
                 {t.content && (
                   <div className="mt-3 flex flex-wrap gap-3 border-t border-edge pt-2 text-xs">
-                    <button className="text-muted hover:text-white" onClick={() => copyAnswer(t)}>Copy</button>
+                    <button className="text-muted hover:text-slate-900" onClick={() => copyAnswer(t)}>Copy</button>
                     {t.tables?.length ? (
-                      <button className="text-muted hover:text-white" onClick={() => toExcel(t, i)}>Excel</button>
+                      <button className="text-muted hover:text-slate-900" onClick={() => toExcel(t, i)}>Excel</button>
                     ) : null}
-                    <button className="text-muted hover:text-white" onClick={() => printAnswer(i)}>PDF / Print</button>
+                    <button className="text-muted hover:text-slate-900" onClick={() => printAnswer(i)}>PDF / Print</button>
                   </div>
                 )}
                 {t.used?.length ? (

@@ -41,7 +41,7 @@ export function Shell({
         return (
           <Link key={n.href} href={n.href}
             className={`flex items-center rounded-lg px-3 py-2.5 text-sm ${
-              active ? 'bg-edge text-white' : 'text-muted hover:bg-edge hover:text-white'
+              active ? 'bg-edge text-slate-900' : 'text-muted hover:bg-edge hover:text-slate-900'
             }`}>
             {n.label}
             {n.href.startsWith('/inbox') && <InboxBadge />}
@@ -67,7 +67,7 @@ export function Shell({
         <button
           onClick={() => setOpen(true)}
           aria-label="Menu"
-          className="rounded-lg border border-edge p-2 leading-none text-muted hover:text-white">
+          className="rounded-lg border border-edge p-2 leading-none text-muted hover:text-slate-900">
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
             <path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
           </svg>

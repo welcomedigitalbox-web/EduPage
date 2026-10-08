@@ -181,7 +181,7 @@ export default async function Thread({ params }: { params: Promise<{ id: string 
           <ul className="space-y-1 text-xs text-muted">
             {events.map((e) => (
               <li key={e.id}>
-                {e.from_stage ?? '—'} → <span className="text-white">{e.to_stage}</span> · {e.reason}
+                {e.from_stage ?? '—'} → <span className="text-slate-900">{e.to_stage}</span> · {e.reason}
                 <span className="ml-1">({ago(e.created_at, t)})</span>
               </li>
             ))}

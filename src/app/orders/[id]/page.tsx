@@ -343,7 +343,7 @@ export default async function OrderPage({
                     {h.track === 'payment' ? t('or2_pay_track')
                       : h.track === 'delivery' ? t('or2_del_track') : t('or2_status')}
                     : {h.from_state ? `${t(`or2_tr_${h.from_state}`)} → ` : ''}
-                    <span className="text-white">
+                    <span className="text-slate-900">
                       {h.to_state === 'cancelled' ? t('os_cancelled') : t(`or2_tr_${h.to_state}`)}
                     </span>
                     {' · '}{(h.actor_name as string) ?? '—'}
