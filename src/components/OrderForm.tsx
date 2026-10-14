@@ -7,7 +7,6 @@ import {
 } from '@/lib/order-rules';
 import { paymentState } from '@/lib/order-payment';
 import { ItemPicker } from '@/components/ItemPicker';
-import { ItemPicker } from '@/components/ItemPicker';
 
 const FIELD =
   'rounded-lg border border-edge bg-ink p-2 text-sm outline-none focus:border-brand';
@@ -112,6 +111,22 @@ export function OrderForm({
       .then((j) => setCatalog(j.items ?? []))
       .catch(() => setCatalog([]));
   }, []);
+
+
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  // Errors stay hidden until the first save attempt: flagging an empty form
+  // the moment it opens is noise, not help.
+  const [touched, setTouched] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  useEffect(() => {
+    if (today) setF((p) => (p.order_date ? p : { ...p, order_date: today }));
+  }, [today]);
+
+  const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) =>
+    setF((p) => ({ ...p, [k]: v }));
+
+  const setLine = (i: number, patch: Partial<Line>) =>
     setLines((p) => p.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
 
   const money = useMemo(
@@ -298,14 +313,9 @@ export function OrderForm({
                 onChange={(e) => setLine(i, { unit_price: e.target.value === '' ? '' : Number(e.target.value) })} />
               <input className={INPUT} type="number" min={0} step="any" inputMode="decimal"
                 placeholder={labels.qty} value={l.qty}
-              <ItemPicker
-                catalog={catalog}
-                value={l.barcode}
-                linked={!!l.product_id}
-                placeholder="Search product"
-                onPick={(c, text) => c
-                  ? setLine(i, { barcode: c.sku, product_id: c.product_id, variant_id: c.variant_id, description: c.label, unit_price: c.price })
-                  : setLine(i, { barcode: text, product_id: null, variant_id: null })} />
+                onChange={(e) => setLine(i, { qty: e.target.value === '' ? '' : Number(e.target.value) })} />
+              <div className="flex items-center justify-end px-2 text-sm tabular-nums text-muted">
+                {fmt(Number(l.unit_price || 0) * Number(l.qty || 0))}
               </div>
               <button className="btn text-xs" aria-label={labels.removeLine}
                 onClick={() => setLines((p) => p.filter((_, idx) => idx !== i))}>✕</button>
@@ -327,6 +337,11 @@ export function OrderForm({
           <div className="label">{labels.money}</div>
           <Row k={labels.subtotal} v={fmt(money.subtotal)} />
           <div className="grid grid-cols-2 gap-3">
+            <Field label={labels.discount} err={show('discount_value')}>
+              {/* w-full on both halves made them fight for the row; the number
+                  flexes and the unit keeps a fixed width instead. */}
+              <div className="flex gap-1">
+                <input
                   className={`min-w-0 flex-1 ${FIELD} ${show('discount_value') ? BAD : ''}`}
                   type="number" min={0} step="any" inputMode="decimal" value={f.discount_value}
                   onChange={(e) => set('discount_value', Number(e.target.value))} />
