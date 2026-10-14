@@ -27,8 +27,17 @@ export function canEdit(role: Role, o: { payment_status?: string | null }): bool
   return role === 'manager' || (o.payment_status ?? 'pending') !== 'done';
 }
 
-export function canCancel(role: Role): boolean {
-  return role === 'manager';
+/** Calling off an order nobody has paid for is ordinary work, so an agent
+ *  does it. Once the money is in, undoing it is a refund, and that is the
+ *  manager's call. */
+export function canCancel(role: Role, o?: { payment_status?: string | null }): boolean {
+  if (role === 'manager') return true;
+  return (o?.payment_status ?? 'pending') !== 'done';
+}
+
+/** Goods already on their way are not cancelled, they come back as a return. */
+export function cancellable(o: { delivery_status?: string | null }): boolean {
+  return (o.delivery_status ?? 'pending') === 'pending';
 }
 
 /** The reports still read one `status` column, so it is derived from the two

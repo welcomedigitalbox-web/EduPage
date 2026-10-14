@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { admin } from '@/lib/supabase';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
-import { canSetTrack, canDelete, canCancel, deriveStatus } from '@/lib/order-workflow';
+import { canSetTrack, canDelete, canCancel, cancellable, deriveStatus } from '@/lib/order-workflow';
 
 export const runtime = 'nodejs';
 
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
 
   const b = await req.json() as {
     id?: string; track?: 'payment' | 'delivery'; to?: string;
-    cancel?: boolean; del?: boolean;
+    cancel?: boolean; reason?: string; del?: boolean;
   };
   if (!b.id) return NextResponse.json({ error: 'no order' }, { status: 400 });
 
@@ -43,11 +43,28 @@ export async function POST(req: NextRequest) {
   }
 
   if (b.cancel) {
-    if (!canCancel(session.role)) {
+    if (!canCancel(session.role, { payment_status: payment })) {
       return NextResponse.json({ error: 'not allowed' }, { status: 403 });
     }
-    await db.from('msgr_orders')
-      .update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', b.id);
+    // Goods already on their way come back as a return, not a cancellation —
+    // otherwise the stock that left is quietly written back as if it never did.
+    if (!cancellable({ delivery_status: delivery })) {
+      return NextResponse.json({ error: 'already on its way — file a return' }, { status: 400 });
+    }
+    if (o.status === 'cancelled') {
+      return NextResponse.json({ error: 'already cancelled' }, { status: 400 });
+    }
+    const reason = (b.reason ?? '').trim();
+    if (!reason) return NextResponse.json({ error: 'a reason is required' }, { status: 400 });
+
+    const { error } = await db.from('msgr_orders').update({
+      status: 'cancelled',
+      cancelled_at: new Date().toISOString(),
+      cancelled_by: session.email ?? session.name ?? null,
+      cancel_reason: reason,
+      updated_at: new Date().toISOString(),
+    }).eq('id', b.id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     await log('order', o.status as string, 'cancelled');
     return NextResponse.json({ ok: true });
   }

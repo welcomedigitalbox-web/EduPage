@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { TRACK, stepIndex, canSetTrack, canDelete, canCancel } from '@/lib/order-workflow';
+import { TRACK, stepIndex, canSetTrack, canDelete, canCancel, cancellable } from '@/lib/order-workflow';
 import type { Role } from '@/lib/session';
 
 export interface WorkflowLabels {
@@ -64,6 +64,19 @@ export function OrderWorkflow({
   );
 
   const deletable = canDelete(role, { payment_status: payment });
+  // Calling off an order is ordinary work until the goods move or the money
+  // lands; after that it is a return or a refund, which is a manager's call.
+  const showCancel =
+    status !== 'cancelled' &&
+    cancellable({ delivery_status: delivery }) &&
+    canCancel(role, { payment_status: payment });
+
+  function askAndCancel() {
+    const reason = window.prompt(labels.cancel);
+    if (reason === null) return;
+    if (!reason.trim()) { setErr('a reason is required'); return; }
+    post({ cancel: true, reason: reason.trim() });
+  }
 
   return (
     <div className="card space-y-3 p-4 print:hidden">
@@ -76,20 +89,24 @@ export function OrderWorkflow({
       {role !== 'manager' && <p className="text-[11px] text-muted">{labels.forwardOnly}</p>}
       {err && <p className="text-xs text-bad">{err}</p>}
 
-      {role === 'manager' && (
+      {(showCancel || role === 'manager') && (
         <div className="flex flex-wrap gap-2 border-t border-edge pt-3">
-          {status !== 'cancelled' && canCancel(role) && (
+          {showCancel && (
             <button className="btn text-xs" disabled={busy}
-              onClick={() => post({ cancel: true })}>{labels.cancel}</button>
+              onClick={askAndCancel}>{labels.cancel}</button>
           )}
-          <button
-            className={`btn text-xs ${deletable ? 'text-bad' : 'opacity-50'}`}
-            disabled={busy || !deletable}
-            title={deletable ? undefined : labels.delLocked}
-            onClick={() => { if (confirm(labels.delConfirm)) post({ del: true }); }}>
-            {labels.del}
-          </button>
-          {!deletable && <span className="self-center text-[11px] text-muted">{labels.delLocked}</span>}
+          {role === 'manager' && (
+            <button
+              className={`btn text-xs ${deletable ? 'text-bad' : 'opacity-50'}`}
+              disabled={busy || !deletable}
+              title={deletable ? undefined : labels.delLocked}
+              onClick={() => { if (confirm(labels.delConfirm)) post({ del: true }); }}>
+              {labels.del}
+            </button>
+          )}
+          {role === 'manager' && !deletable && (
+            <span className="self-center text-[11px] text-muted">{labels.delLocked}</span>
+          )}
         </div>
       )}
     </div>
