@@ -6,6 +6,8 @@ import {
   type FieldKey,
 } from '@/lib/order-rules';
 import { paymentState } from '@/lib/order-payment';
+import { ItemPicker } from '@/components/ItemPicker';
+import { ItemPicker } from '@/components/ItemPicker';
 
 const FIELD =
   'rounded-lg border border-edge bg-ink p-2 text-sm outline-none focus:border-brand';
@@ -110,38 +112,6 @@ export function OrderForm({
       .then((j) => setCatalog(j.items ?? []))
       .catch(() => setCatalog([]));
   }, []);
-
-  // Typing or scanning a sku fills the line from the POS catalogue. A line
-  // with no product behind it still sells, it just moves no stock.
-  function pickItem(i: number, code: string) {
-    const hit = catalog.find((c) => c.sku === code);
-    if (!hit) {
-      setLine(i, { barcode: code, product_id: null, variant_id: null });
-      return;
-    }
-    setLine(i, {
-      barcode: code,
-      product_id: hit.product_id,
-      variant_id: hit.variant_id,
-      description: hit.label,
-      unit_price: hit.price,
-    });
-  }
-
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  // Errors stay hidden until the first save attempt: flagging an empty form
-  // the moment it opens is noise, not help.
-  const [touched, setTouched] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  useEffect(() => {
-    if (today) setF((p) => (p.order_date ? p : { ...p, order_date: today }));
-  }, [today]);
-
-  const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) =>
-    setF((p) => ({ ...p, [k]: v }));
-
-  const setLine = (i: number, patch: Partial<Line>) =>
     setLines((p) => p.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
 
   const money = useMemo(
@@ -312,10 +282,15 @@ export function OrderForm({
 
         <div className="space-y-3">
           {lines.map((l, i) => (
-            <div key={i} className="grid gap-2 border-b border-edge/60 pb-3 last:border-0 sm:grid-cols-[8rem_1fr_7rem_5rem_7rem_2rem]">
-              <input className={INPUT} placeholder={labels.barcode} value={l.barcode}
-                list="pos-catalog"
-                onChange={(e) => pickItem(i, e.target.value)} />
+            <div key={i} className="grid gap-2 border-b border-edge/60 pb-3 last:border-0 sm:grid-cols-[14rem_1fr_7rem_5rem_7rem_2rem]">
+              <ItemPicker
+                catalog={catalog}
+                value={l.barcode}
+                linked={!!l.product_id}
+                placeholder="Search product"
+                onPick={(c, text) => c
+                  ? setLine(i, { barcode: c.sku, product_id: c.product_id, variant_id: c.variant_id, description: c.label, unit_price: c.price })
+                  : setLine(i, { barcode: text, product_id: null, variant_id: null })} />
               <input className={INPUT} placeholder={labels.description} value={l.description}
                 onChange={(e) => setLine(i, { description: e.target.value })} />
               <input className={INPUT} type="number" min={0} step="any" inputMode="decimal"
@@ -323,9 +298,14 @@ export function OrderForm({
                 onChange={(e) => setLine(i, { unit_price: e.target.value === '' ? '' : Number(e.target.value) })} />
               <input className={INPUT} type="number" min={0} step="any" inputMode="decimal"
                 placeholder={labels.qty} value={l.qty}
-                onChange={(e) => setLine(i, { qty: e.target.value === '' ? '' : Number(e.target.value) })} />
-              <div className="flex items-center justify-end px-2 text-sm tabular-nums text-muted">
-                {fmt(Number(l.unit_price || 0) * Number(l.qty || 0))}
+              <ItemPicker
+                catalog={catalog}
+                value={l.barcode}
+                linked={!!l.product_id}
+                placeholder="Search product"
+                onPick={(c, text) => c
+                  ? setLine(i, { barcode: c.sku, product_id: c.product_id, variant_id: c.variant_id, description: c.label, unit_price: c.price })
+                  : setLine(i, { barcode: text, product_id: null, variant_id: null })} />
               </div>
               <button className="btn text-xs" aria-label={labels.removeLine}
                 onClick={() => setLines((p) => p.filter((_, idx) => idx !== i))}>✕</button>
@@ -337,11 +317,6 @@ export function OrderForm({
           onClick={() => setLines((p) => [...p, { barcode: '', description: '', unit_price: '', qty: 1, product_id: null, variant_id: null }])}>
           + {labels.addLine}
         </button>
-        <datalist id="pos-catalog">
-          {catalog.map((c) => (
-            <option key={c.product_id + ':' + (c.variant_id ?? '')} value={c.sku}>{c.label}</option>
-          ))}
-        </datalist>
 
         {show('items') && <p className="mt-2 text-xs text-bad">{show('items')}</p>}
       </section>
@@ -352,11 +327,6 @@ export function OrderForm({
           <div className="label">{labels.money}</div>
           <Row k={labels.subtotal} v={fmt(money.subtotal)} />
           <div className="grid grid-cols-2 gap-3">
-            <Field label={labels.discount} err={show('discount_value')}>
-              {/* w-full on both halves made them fight for the row; the number
-                  flexes and the unit keeps a fixed width instead. */}
-              <div className="flex gap-1">
-                <input
                   className={`min-w-0 flex-1 ${FIELD} ${show('discount_value') ? BAD : ''}`}
                   type="number" min={0} step="any" inputMode="decimal" value={f.discount_value}
                   onChange={(e) => set('discount_value', Number(e.target.value))} />
