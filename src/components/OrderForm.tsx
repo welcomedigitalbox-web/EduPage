@@ -73,6 +73,12 @@ export function OrderForm({
     fetch('/api/couriers').then((r) => r.json()).then((j) => setCouriers(j.rows ?? []));
   }, []);
 
+  const [whs, setWhs] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    fetch('/api/warehouses').then((r) => r.json())
+      .then((j) => setWhs(j.rows ?? [])).catch(() => setWhs([]));
+  }, []);
+
   const [f, setF] = useState({
     customer_name: initial.customer_name ?? '',
     phone: initial.phone ?? '',
@@ -95,6 +101,7 @@ export function OrderForm({
     advance_payment: initial.advance_payment ?? 0,
     delivery_fee: initial.delivery_fee ?? 0,
     discount: initial.discount ?? 0,
+    source_store_id: (initial as { source_store_id?: string }).source_store_id ?? '',
     status: initial.status ?? 'pending',
     note: initial.note ?? '',
   });
@@ -197,6 +204,7 @@ export function OrderForm({
 
   async function save() {
     setTouched(true);
+    if (!f.source_store_id) { setErr('Pick the warehouse this order ships from'); return; }
     if (Object.keys(errs).length) { setErr(labels.fixFirst); return; }
     setBusy(true); setErr(null);
     const res = await fetch('/api/online-orders', {
@@ -261,6 +269,13 @@ export function OrderForm({
           </Field>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Ships from">
+            <select className={INPUT} value={f.source_store_id}
+              onChange={(e) => set('source_store_id', e.target.value)}>
+              <option value="">Pick warehouse</option>
+              {whs.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          </Field>
         <Field label={labels.srcChannel} err={show('order_channel_id')}>
           <select className={`${INPUT} ${show('order_channel_id') ? BAD : ''}`}
             value={f.order_channel_id}

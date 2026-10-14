@@ -22,6 +22,7 @@ export interface OrderInput {
   city?: string | null;
   delivery_address?: string | null;
   shop_id?: string | null;
+  source_store_id?: string | null;
   order_date?: string;
   delivery_method?: string | null;
   payment_method?: string;
@@ -118,6 +119,7 @@ export async function saveOrder(
     city: input.city?.trim() || null,
     delivery_address: input.delivery_address?.trim() || null,
     shop_id: input.shop_id || null,
+    source_store_id: input.source_store_id || null,
     order_date: input.order_date || undefined,
     delivery_method: input.delivery_method?.trim() || null,
     payment_method: input.payment_method || 'cod',
@@ -358,4 +360,13 @@ export async function orderDetail(id: string) {
   const { data: items } = await db
     .from('msgr_order_items').select('*').eq('order_id', id).order('sort_order');
   return { order, items: items ?? [] };
+}
+
+/** The POS warehouses an online order can ship from. Without one the stock
+ *  movement has no shop to come out of, so the order cannot be packed. */
+export async function warehouses() {
+  const { data } = await admin()
+    .from('stores').select('id,name')
+    .eq('is_active', true).eq('is_warehouse', true).order('name');
+  return data ?? [];
 }
